@@ -36,7 +36,7 @@ Design for failure. Assume the user will force-quit the application or the machi
 ## 6. Zero-Defect Safety
 
 - **No Unhandled Exceptions:** Exhaustively handle all errors. In Rust, propagate errors via `Result` and exhaustively match `Option`. Do not leave `unwrap()` or `expect()` in production paths.
-- **No Undefined Behavior or Data Races:** Rely on Rust's borrow checker and type system. Do not use `unsafe` code unless absolutely mathematically necessary.
+- **No Undefined Behavior or Data Races:** Rely on Rust's borrow checker and type system. All library crates must carry `#![deny(unsafe_code)]`. Do not use `unsafe` blocks in application code under any circumstances.
 
 ## 7. Git Workflow & Holistic Atomic Commits
 
@@ -64,6 +64,7 @@ The developer experience must be completely frictionless. Ensure that build scri
 
 - `src/` — Frontend application code (React/Vue/Svelte, etc.).
 - `src-tauri/src/` — Rust backend code and IPC command handlers.
+- `e2e/` — Playwright end-to-end tests (run against the compiled binary via `tauri-driver`).
 - `docs/arch/` — Architecture Decision Records (ADRs).
 - **Restricted:** Do not modify auto-generated IPC bindings, lockfiles (`pnpm-lock.yaml`, `Cargo.lock`), third-party vendored code, or this `AGENTS.md` file unless explicitly instructed.
 
@@ -81,5 +82,7 @@ Use these to validate your work before submitting changes:
 - **Start dev server (Frontend + Rust):** `pnpm tauri dev`
 - **Frontend validation:** `pnpm check` && `pnpm lint`
 - **Backend validation:** `cargo fmt --all -- --check` && `cargo clippy --all-targets -- -D warnings`
-- **Run tests:** `cargo test` (Backend) / `pnpm test` (Frontend)
+- **Run unit tests:** `cargo test` (Backend) / `pnpm test` (Frontend component tests)
+- **Run fuzz tests:** `cargo +nightly fuzz run <target>` (Linux/WSL2 only; see `src-tauri/fuzz/`)
+- **Run E2E tests:** `pnpm test:e2e` (requires compiled binary; see `e2e/`)
 - **Generate Docs/Graphs:** `pnpm docs:all` (Generates TypeDoc definitions and codebase dependency graphs)
