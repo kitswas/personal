@@ -10,7 +10,14 @@ No piece of state lives in two places. If a constant, configuration, or state fi
 
 Think deeply before you write code. All architectural and logic decisions must be explicitly reasoned out. If a requirement is ambiguous, state your assumption clearly or ask for clarification before proceeding. Do not guess.
 
-## 3. Strict Architectural Boundaries
+## 3. Every Line of Code is a Liability
+
+Code requires understanding, testing, maintaining, and debugging.
+
+- **No Speculative Engineering:** Do not build abstractions, features, or configuration keys "just in case." Solve only the immediate problem using the simplest, most direct approach. Keep it simple.
+- **Delete Whenever Possible:** Strive for minimalism. Dead, unused, or replaced code must be completely removed from the codebase, never bypassed or commented out.
+
+## 4. Strict Architectural Boundaries
 
 Respect the Tauri paradigm.
 
@@ -18,7 +25,7 @@ Respect the Tauri paradigm.
 - **Backend (`src-tauri/`):** Strictly for system/OS access, file system operations, and heavy computation. Written in Rust.
 - **Communication:** Cross-boundary communication happens exclusively through Tauri IPC commands and events. Shared DTOs/types must be synchronized (preferably via generated bindings).
 
-## 4. Total Correctness & Functional Patterns
+## 5. Total Correctness & Functional Patterns
 
 Design the codebase to be low-maintenance and highly predictable.
 
@@ -26,41 +33,49 @@ Design the codebase to be low-maintenance and highly predictable.
 - **Total Correctness:** Prove total program correctness by ensuring two conditions are met: **termination** (no infinite loops or deadlocks) and **partial correctness** (producing the right output for given inputs).
 - **Deterministic Convergence:** Ensure all conditional branches and state machines converge correctly and predictably.
 
-## 5. Crash-Resilience & Atomic Operations
+## 6. Crash-Resilience & Atomic Operations
 
 Design for failure. Assume the user will force-quit the application or the machine will lose power in the middle of a critical operation.
 
 - Use **atomic operations** wherever possible (e.g., write to a temporary file and atomically rename it, or use strict database transactions).
 - Never leave local storage, configuration files, or database rows in a corrupted, half-written state.
 
-## 6. Zero-Defect Safety
+## 7. Zero-Defect Safety
 
 - **No Unhandled Exceptions:** Exhaustively handle all errors. In Rust, propagate errors via `Result` and exhaustively match `Option`. Do not leave `unwrap()` or `expect()` in production paths.
 - **No Undefined Behavior or Data Races:** Rely on Rust's borrow checker and type system. All library crates must carry `#![deny(unsafe_code)]`. Do not use `unsafe` blocks in application code under any circumstances.
 
-## 7. Git Workflow & Holistic Atomic Commits
+## 8. Asynchronous UI State Visibility
+
+For every asynchronous operation, the UI must explicitly and accurately reflect the current execution state to the user. Do not silently fail or trap the user in a loading state.
+
+- **Processing:** Always show a clear active state. Use definite progress indicators if the operation length is quantifiable or has checkpoints, or indefinite indicators (spinners) if unknown.
+- **Success:** Provide unambiguous visual confirmation when an operation completes successfully.
+- **Failure:** Catch all rejections and surface them gracefully to the UI. The user must be provided with a clear, actionable, and human-readable reason for the failure.
+
+## 9. Git Workflow & Holistic Atomic Commits
 
 - **Atomic Commits:** Every commit must be a single, self-contained logical unit (one feature, one bug fix, or one refactor).
 - **Independently Revertible:** Every single commit in the history must be independently revertible without breaking the application state or the CI pipeline.
 - **Complete Context:** A code change commit must simultaneously include all relevant **test updates** and **documentation updates**. Do not defer tests or docs to follow-up commits.
 - **Test Per Commit:** Run the full relevant test suite for *every* commit. The commit history must remain entirely green and compilable at every step.
 
-## 8. Tooling and Environment Baseline
+## 10. Tooling and Environment Baseline
 
 - **Frontend:** Use `pnpm` exclusively (never `npm` or `yarn`). Run strictly typed TypeScript.
 - **Backend:** Use standard Cargo tooling. Treat `cargo clippy` warnings as errors.
 - **Validation:** Before finishing a task, ensure both environments compile and validate successfully.
 
-## 9. Dependency Management & Ecosystem Security
+## 11. Dependency Management & Ecosystem Security
 
 - **Minimal JS Dependencies:** The JavaScript ecosystem carries supply chain risks. Keep frontend dependencies to an absolute bare minimum. Write utility functions yourself if the alternative is importing a micro-library.
 - **48-Hour Rule:** Any new npm package or version bump must have a minimum release age of **48 hours** before integration.
 
-## 10. Cross-Platform Developer Experience (DX)
+## 12. Cross-Platform Developer Experience (DX)
 
 The developer experience must be completely frictionless. Ensure that build scripts, testing, and lifecycle commands execute seamlessly across Windows, macOS, and Linux. Do not introduce hardcoded bash-isms or OS-specific dependencies in local dev scripts.
 
-## 11. Directory Map & Restricted Zones
+## 13. Directory Map & Restricted Zones
 
 - `src/` — Frontend application code (React/Vue/Svelte, etc.).
 - `src-tauri/src/` — Rust backend code and IPC command handlers.
@@ -68,13 +83,13 @@ The developer experience must be completely frictionless. Ensure that build scri
 - `docs/arch/` — Architecture Decision Records (ADRs).
 - **Restricted:** Do not modify auto-generated IPC bindings, lockfiles (`pnpm-lock.yaml`, `Cargo.lock`), third-party vendored code, or this `AGENTS.md` file unless explicitly instructed.
 
-## 12. Auto-Generated Architecture Documentation
+## 14. Auto-Generated Architecture Documentation
 
 Do not manually draw static system diagrams that will fall out of date. Generate architecture diagrams and dependency graphs directly from the codebase.
 
 - Rely on tools like `dependency-cruiser`, `typedoc`, and `mermaid` to programmatically map system boundaries.
 
-## 13. Common Commands
+## 15. Common Commands
 
 Use these to validate your work before submitting changes:
 
