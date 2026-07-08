@@ -38,24 +38,30 @@ Design for failure. Assume the user will force-quit the application or the machi
 * **No Unhandled Exceptions:** Exhaustively handle all errors. In Rust, propagate errors via `Result` and exhaustively match `Option`. Do not leave `unwrap()` or `expect()` in production paths.
 * **No Undefined Behavior or Data Races:** Rely on Rust's borrow checker and type system. Do not use `unsafe` code unless absolutely mathematically necessary.
 
-## 7. Tooling and Environment Baseline
+## 7. Git Workflow & Atomic Commits
+
+* **Atomic Commits:** Every commit must be a single, self-contained logical unit (one feature, one bug fix, or one refactor).
+* **Independently Revertible:** Do not mix unrelated changes. Every single commit in the history must be independently revertible without breaking the application state.
+* **Test Per Commit:** Run the full relevant test suite for *every* commit. The commit history must remain entirely green and compilable at every step.
+
+## 8. Tooling and Environment Baseline
 
 * **Frontend:** Use `pnpm` exclusively (never `npm` or `yarn`). Run strictly typed TypeScript.
 * **Backend:** Use standard Cargo tooling. Treat `cargo clippy` warnings as errors.
 * **Validation:** Before finishing a task, ensure both environments compile and validate successfully.
 
-## 8. Read Before Write
+## 9. Read Before Write
 
 Inspect existing module structures, trait implementations, and adjacent tests before modifying anything. Do not invent speculative abstractions, and do not add configuration keys or dependencies without a concrete, immediate use case.
 
-## 9. Directory Map & Restricted Zones
+## 10. Directory Map & Restricted Zones
 
 * `src/` — Frontend application code (React/Vue/Svelte, etc.).
 * `src-tauri/src/` — Rust backend code and IPC command handlers.
 * `docs/arch/` — Architecture Decision Records (ADRs).
 * **Restricted:** Do not modify auto-generated IPC bindings, lockfiles (`pnpm-lock.yaml`, `Cargo.lock`), third-party vendored code, or this `AGENTS.md` file unless explicitly instructed.
 
-## 10. Common Commands
+## 11. Common Commands
 
 Use these to validate your work before submitting changes:
 
