@@ -38,10 +38,11 @@ Design for failure. Assume the user will force-quit the application or the machi
 * **No Unhandled Exceptions:** Exhaustively handle all errors. In Rust, propagate errors via `Result` and exhaustively match `Option`. Do not leave `unwrap()` or `expect()` in production paths.
 * **No Undefined Behavior or Data Races:** Rely on Rust's borrow checker and type system. Do not use `unsafe` code unless absolutely mathematically necessary.
 
-## 7. Git Workflow & Atomic Commits
+## 7. Git Workflow & Holistic Atomic Commits
 
 * **Atomic Commits:** Every commit must be a single, self-contained logical unit (one feature, one bug fix, or one refactor).
-* **Independently Revertible:** Do not mix unrelated changes. Every single commit in the history must be independently revertible without breaking the application state.
+* **Independently Revertible:** Every single commit in the history must be independently revertible without breaking the application state or the CI pipeline.
+* **Complete Context:** A code change commit must simultaneously include all relevant **test updates** and **documentation updates**. Do not defer tests or docs to follow-up commits.
 * **Test Per Commit:** Run the full relevant test suite for *every* commit. The commit history must remain entirely green and compilable at every step.
 
 ## 8. Tooling and Environment Baseline
@@ -50,23 +51,35 @@ Design for failure. Assume the user will force-quit the application or the machi
 * **Backend:** Use standard Cargo tooling. Treat `cargo clippy` warnings as errors.
 * **Validation:** Before finishing a task, ensure both environments compile and validate successfully.
 
-## 9. Read Before Write
+## 9. Dependency Management & Ecosystem Security
 
-Inspect existing module structures, trait implementations, and adjacent tests before modifying anything. Do not invent speculative abstractions, and do not add configuration keys or dependencies without a concrete, immediate use case.
+* **Minimal JS Dependencies:** The JavaScript ecosystem carries supply chain risks. Keep frontend dependencies to an absolute bare minimum. Write utility functions yourself if the alternative is importing a micro-library.
+* **48-Hour Rule:** Any new npm package or version bump must have a minimum release age of **48 hours** before integration.
 
-## 10. Directory Map & Restricted Zones
+## 10. Cross-Platform Developer Experience (DX)
+
+The developer experience must be completely frictionless. Ensure that build scripts, testing, and lifecycle commands execute seamlessly across Windows, macOS, and Linux. Do not introduce hardcoded bash-isms or OS-specific dependencies in local dev scripts.
+
+## 11. Directory Map & Restricted Zones
 
 * `src/` — Frontend application code (React/Vue/Svelte, etc.).
 * `src-tauri/src/` — Rust backend code and IPC command handlers.
 * `docs/arch/` — Architecture Decision Records (ADRs).
 * **Restricted:** Do not modify auto-generated IPC bindings, lockfiles (`pnpm-lock.yaml`, `Cargo.lock`), third-party vendored code, or this `AGENTS.md` file unless explicitly instructed.
 
-## 11. Common Commands
+## 12. Auto-Generated Architecture Documentation
+
+Do not manually draw static system diagrams that will fall out of date. Generate architecture diagrams and dependency graphs directly from the codebase.
+
+* Rely on tools like `dependency-cruiser`, `typedoc`, and `mermaid` to programmatically map system boundaries.
+
+## 13. Common Commands
 
 Use these to validate your work before submitting changes:
 
 * **Install dependencies:** `pnpm install`
 * **Start dev server (Frontend + Rust):** `pnpm tauri dev`
-* **Frontend validation:** `pnpm typecheck` && `pnpm lint`
+* **Frontend validation:** `pnpm check` && `pnpm lint`
 * **Backend validation:** `cargo fmt --all -- --check` && `cargo clippy --all-targets -- -D warnings`
 * **Run tests:** `cargo test` (Backend) / `pnpm test` (Frontend)
+* **Generate Docs/Graphs:** `pnpm docs:all` (Generates TypeDoc definitions and codebase dependency graphs)
