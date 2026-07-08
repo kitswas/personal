@@ -429,6 +429,7 @@ All wizard state is local `$state`; the IPC call is made only on the final scree
 - Batch commit calls `commit_import_batch()` — Rust validates each set
 
 Data flow is a pure pipeline:
+
 ```
 File bytes
   -> parse_statement()     [Rust: calamine/csv + TOML template]
@@ -467,14 +468,17 @@ Pre-bundled TOML templates shipped with the binary via `tauri::path::resource_di
 ### Phase 9 — Security Hardening
 
 #### `tauri.conf.json`
+
 - `productName` and `title`: `"Personal"`
 - `csp`: `"default-src 'self'; style-src 'self' 'unsafe-inline'"`
 
 #### `capabilities/default.json`
+
 - Allow: `dialog:open`, `dialog:save` (file picker only)
 - Frontend never touches the filesystem directly
 
 #### DB lifecycle
+
 - Connection opened only after `unlock()` succeeds
 - `PRAGMA rekey` executed on password change
 - `PRAGMA journal_mode = WAL` for crash-safe writes
@@ -514,7 +518,7 @@ cd src-tauri && cargo test
 > `cargo-fuzz` requires nightly Rust and runs on Linux / macOS.
 > Use WSL2 locally or a Linux GitHub Actions runner for CI.
 > Alternative for Tauri-specific IPC boundary testing:
-> `tauri-fuzz` (CrabNebula) — https://github.com/crabnebula-dev/tauri-fuzz
+> `tauri-fuzz` (CrabNebula) — <https://github.com/crabnebula-dev/tauri-fuzz>
 
 All four fuzz targets exercise the zero-trust parsing surfaces.
 Fuzz targets are pure functions — they do not touch the DB.
@@ -668,26 +672,31 @@ export const expect = base.expect;
 #### E2E test scenarios (by spec file)
 
 **`onboarding.spec.ts`**
+
 - Fresh install: main UI is blocked; `/onboarding` is shown
 - Completing onboarding writes `onboarding_complete = true`; redirect to `/dashboard`
 - Closing mid-onboarding (simulated by restarting the app): onboarding resumes, not skipped
 
 **`accounts.spec.ts`**
+
 - Create one account of each type; verify all 5 appear in the sidebar
 - Delete an account with no postings; verify it disappears
 - Attempt to delete an account with existing postings; verify confirmation dialog
 
 **`transactions.spec.ts`**
+
 - Enter a balanced transaction; verify it appears in the ledger
 - Attempt an unbalanced transaction; verify error toast
 - Delete a transaction; verify it is removed from ledger
 
 **`import.spec.ts`**
+
 - Drop a valid HDFC CSV; select the `hdfc_savings` template; verify all rows parse as Valid
 - Commit; verify transactions appear in the ledger
 - Drop a corrupt file; verify Invalid rows appear in red; correct one inline; commit
 
 **`analytics.spec.ts`**
+
 - After committing test transactions; verify chart elements are rendered (`data-testid` selectors)
 
 #### Scripts in `package.json`
