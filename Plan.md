@@ -85,7 +85,7 @@ is_onboarding_done()? ──No──> /onboarding (multi-step wizard)
 
 ```
 +------------------------------------------------------------+
-|                     User''s Machine                         |
+|                     User''s Machine                        |
 |                                                            |
 |  +------------------------------------------------------+  |
 |  |              Tauri Application Process               |  |
@@ -101,13 +101,13 @@ is_onboarding_done()? ──No──> /onboarding (multi-step wizard)
 |  |  |                       |  |  Naive Bayes        |  |  |
 |  |  |                       |  |  rusqlite+cipher    |  |  |
 |  |  +-----------------------+  +----------+----------+  |  |
-|  |                                        |              |  |
-|  +----------------------------------------+--------------+  |
-|                                           |                  |
-|  +----------------------+  +--------------v--------------+  |
-|  | OS Keystore          |  | data.db (SQLCipher AES-256) |  |
-|  | (Master Key)         |->| $APP_DATA/Personal/         |  |
-|  +----------------------+  +-----------------------------+  |
+|  |                                        |             |  |
+|  +----------------------------------------+-------------+  |
+|                                           |                |
+|  +----------------------+  +--------------v--------------+ |
+|  | OS Keystore          |  | data.db (SQLCipher AES-256) | |
+|  | (Master Key)         |->| $APP_DATA/Personal/         | |
+|  +----------------------+  +-----------------------------+ |
 +------------------------------------------------------------+
 ```
 
@@ -699,16 +699,7 @@ export const expect = base.expect;
 
 - After committing test transactions; verify chart elements are rendered (`data-testid` selectors)
 
-#### Scripts in `package.json`
-
-```json
-"scripts": {
-  "test:e2e:prepare": "cargo tauri build --debug",
-  "test:e2e:run":     "playwright test",
-  "test:e2e:report":  "playwright show-report",
-  "test:e2e":         "pnpm test:e2e:prepare && pnpm test:e2e:run"
-}
-```
+> See the **Tooling & Code Style** section above for the full `package.json` scripts reference.
 
 ---
 
@@ -733,10 +724,27 @@ export const expect = base.expect;
 personal/
 ├── Plan.md                              <- this file
 ├── blueprint.md
-├── package.json                         [MODIFY] add vitest, svelteplot, playwright
-├── pnpm-workspace.yaml
+├── package.json                         [MODIFY] add all dev tooling + test deps
+├── pnpm-workspace.yaml                  [MODIFY] add trustPolicy + sharedWorkspaceLockfile
+├── .prettierrc                          [NEW]
+├── .prettierignore                      [NEW]
+├── eslint.config.js                     [NEW]
+├── .editorconfig                        [NEW]
+├── .gitattributes                       [NEW]
+├── typedoc.json                         [NEW]
+├── typedoc.tsconfig.json                [NEW]
+├── .dependency-cruiser.js               [NEW]
+├── .husky/
+│   ├── pre-commit                       [NEW] format:check
+│   └── pre-push                         [NEW] lint + cargo checks
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                       [NEW] lint + Rust check + unit + component + E2E
+│       ├── release.yml                  [NEW] cross-platform build & GitHub Release
+│       └── docs.yml                     [NEW] generate & deploy docs to GitHub Pages
 ├── svelte.config.js
 ├── vite.config.js
+├── tsconfig.json                        [MODIFY] add noUncheckedIndexedAccess
 │
 ├── e2e/                                 [NEW dir]
 │   ├── playwright.config.ts
@@ -813,10 +821,213 @@ personal/
 
 ---
 
+## CI / CD
+
+Three workflows, adapted from the `job-autofill` reference.
+Key differences from the reference:
+
+- Rust toolchain + `cargo` steps required on every job that touches the backend
+- `tauri-driver` for E2E instead of a headless browser; requires `xvfb-run` on Linux
+- Cross-platform release matrix (`windows-latest`, `macos-latest`, `ubuntu-latest`)
+- Fuzz job is Linux-only (cargo-fuzz / libFuzzer constraint)
+
+### `ci.yml` — runs on every PR and push to `main`
+
+Jobs run in this order (each depends on the previous passing):
+
+```
+lint  ──────────────────────────────────────────────────────┐
+                                                            ├──► (all pass)
+rust-check  ──────────────────────────────────────────────┐ │
+  (cargo fmt --check + cargo clippy -D warnings)          │ │
+                                                          │ │
+test-unit ────────────────────────────────────────────────┤ │
+  (cargo test  +  pnpm test)                              │ │
+                                                          │ │
+test-e2e  ────────────────────────────────────────────────┘ │
+  (pnpm test:e2e on ubuntu-latest via xvfb-run)             │
+                                                            │
+             ◄──────────────────────────────────────────────┘
+             merge allowed
+```
+
+```yaml
+# .github/workflows/ci.yml (outline)
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+        with: { version: 10 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm lint
+      - run: pnpm format:check
+
+  rust-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy, rustfmt }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - run: cargo fmt --all -- --check
+        working-directory: src-tauri
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: src-tauri
+
+  test-unit:
+    runs-on: ubuntu-latest
+    needs: [lint, rust-check]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - uses: pnpm/action-setup@v5
+        with: { version: 10 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: pnpm }
+      - run: cargo test
+        working-directory: src-tauri
+      - run: pnpm install && pnpm test
+
+  test-e2e:
+    runs-on: ubuntu-latest
+    needs: [test-unit]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - uses: pnpm/action-setup@v5
+        with: { version: 10 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install
+      - name: Install system deps (WebKit, Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf xvfb
+      - name: Install tauri-driver
+        run: cargo install tauri-driver
+      - name: Install Playwright
+        run: npx playwright install chromium --with-deps
+      - name: Build debug binary
+        run: pnpm test:e2e:prepare
+      - name: Run E2E tests
+        run: xvfb-run pnpm test:e2e:run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 1
+```
+
+> **Note — fuzz tests in CI:** `cargo-fuzz` requires nightly and only runs on
+> Linux. Fuzz runs are not part of the regular PR gate (they are slow). Instead,
+> run them on a schedule (e.g. weekly) or manually. A separate `fuzz.yml`
+> workflow can be added later for scheduled fuzzing on a Linux runner.
+
+---
+
+### `release.yml` — triggered manually via `workflow_dispatch`
+
+Pattern mirrors `job-autofill/release.yml`: check-tag → lint → test → build.
+Key difference: Tauri requires a **platform matrix** to produce native binaries.
+
+```
+check-release-tag
+       |
+  ┌────┴────┐
+lint  rust-check
+  └────┬────┘
+  test-unit + test-e2e
+       |
+  build-matrix (3 platforms in parallel)
+  ┌────────────────────────────────┐
+  │ windows-latest  (.msi / .exe)  │
+  │ macos-latest    (.dmg / .app)  │
+  │ ubuntu-latest   (.deb / .AppImage) │
+  └────────────────────────────────┘
+       |
+  create-github-release
+  (uploads all platform artifacts)
+```
+
+Version is read from `src-tauri/tauri.conf.json` `.version`.
+A git tag `vX.Y.Z` is created automatically; if the tag already exists the
+workflow exits early (idempotent — mirrors the reference pattern).
+
+Secrets required:
+
+- `TAURI_SIGNING_PRIVATE_KEY` — app signing key (Tauri updater)
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+---
+
+### `docs.yml` — runs on push to `main`
+
+Direct port of `job-autofill/static.yml`:
+
+```yaml
+name: Generate docs and deploy to Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  generate-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+        with: { version: 10 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install
+      - name: Install Graphviz
+        run: sudo apt-get install -y graphviz
+      - name: Build documentation
+        run: pnpm docs:all
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: docs/html }
+      - uses: actions/deploy-pages@v4
+        id: deployment
+```
+
+---
+
 ## Implementation Order
 
 | # | Phase | Deliverable | Effort |
 |---|---|---|---|
+| 0 | Tooling bootstrap | Prettier, ESLint, EditorConfig, Husky, `.gitattributes`, TypeDoc, dependency-cruiser, CI workflows | Low |
 | 1 | Dependencies & DB | Encrypted DB opens on launch | Medium |
 | 2 | Rust IPC commands | All backend commands wired + unit tests | High |
 | 3 | Design system & layout | Nav shell, tokens, dark mode | Medium |
