@@ -18,12 +18,66 @@ the master key never touches the disk.
 | Styling | Oat.ink + plain CSS (fluid units) | Blueprint requirement; no Tailwind |
 | Charts | SveltePlot | Grammar-of-graphics for analytics |
 | Backend | Rust | Memory-safe systems language |
-| DB | SQLite encrypted via SQLCipher | Full-page AES-256 encryption |
-| Encryption driver | `rusqlite` with `bundled-sqlcipher-vendored-openssl` | Self-contained build on all platforms; no external OpenSSL install required |
+| DB | SQLite encrypted via SQLCipher | Full-page AES-256 encryption at rest |
+| Encryption driver | `rusqlite` with `bundled-sqlcipher-vendored-openssl` | Self-contained build; no external OpenSSL install on Windows |
 | Key storage | `keyring` crate (OS Keychain / Credential Manager) | Key never written to disk |
 | Excel parsing | `calamine` | Handles .xls / .xlsx without COM |
 | CSV parsing | `csv` crate | Zero-allocation reader |
 | Template format | TOML | Literal strings eliminate regex-escape hell |
+| E2E testing | Playwright (via `tauri-driver` + WebDriver) | True desktop automation against native webview |
+
+---
+
+## Correctness Principles
+
+This codebase enforces **total program correctness**: every branch must
+terminate and every reachable state must satisfy the program invariants.
+
+### Functional Programming Style
+
+- **Rust backend:** Pure functions preferred; side effects (DB, keyring, FS)
+  are isolated to the command handlers and `db.rs`. No global mutable state
+  outside of `tauri::State`. All mutation goes through a single `Mutex`-guarded
+  connection handle.
+- **Svelte frontend:** Derived state only via `$derived` / `$derived.by`.
+  No implicit side-effect chains. Event handlers are pure transformations
+  returning new state.
+- **No panics in library code.** `unwrap()` and `expect()` are banned outside
+  of `main`/`run` bootstrap. All fallible paths return `Result<T, AppError>`.
+- **No `unsafe` blocks** except where required by the SQLCipher FFI (which is
+  encapsulated inside `rusqlite` itself and not written by us).
+
+### Total Correctness Guarantees
+
+| Property | Mechanism |
+|---|---|
+| **Termination** | All recursive functions are bounded (no unbounded loops in parser; regex engine has a timeout via `regex::RegexBuilder::size_limit`). Naive Bayes uses a fixed feature vocabulary. |
+| **Partial correctness** | Every IPC command returns `Result<T, AppError>`; the frontend maps `Err` variants to visible error UI — no silent failures. |
+| **No unhandled exceptions** | TypeScript `strict` mode; `noUncheckedIndexedAccess`; all `Promise` chains end in `.catch()` or `try/catch`. |
+| **No data races** | Single `Arc<Mutex<Connection>>` for the DB; `Mutex` is held only for the duration of each SQL statement, then released. All Tauri commands are `async` and run on Tokio's thread pool. |
+| **No undefined behaviour** | No `unsafe` in application code. Clippy `#![deny(unsafe_code)]` on library crates. |
+| **All branches covered** | Rust enums (e.g., `ParsedRow`) are exhaustively matched. TypeScript discriminated unions are exhaustively narrowed. |
+
+### Onboarding Guard — `is_onboarding_done()`
+
+> **Design note:** We use `is_onboarding_done()` rather than `is_first_run()`.
+> `is_first_run()` is unidirectional — once it returns false, the guard is
+> gone even if the user quit mid-onboarding. `is_onboarding_done()` reads the
+> `settings` table for an explicit `onboarding_complete = true` key that is
+> only written at the very last step of the wizard. This guarantees that
+> partially-completed onboarding is always resumed correctly.
+
+```
+App launch
+   |
+   v
+is_onboarding_done()? ──No──> /onboarding (multi-step wizard)
+   |                               |
+   Yes                      [Finish Setup]
+   |                               |
+   v                               v
+/dashboard <──────────────────────'
+```
 
 ---
 
@@ -67,18 +121,20 @@ the master key never touches the disk.
 CREATE TABLE settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+    -- 'onboarding_complete' = 'true' written ONLY on wizard completion
+    -- 'default_commodity'   = e.g. 'INR'
 );
 
 CREATE TABLE accounts (
-    id        TEXT PRIMARY KEY,          -- UUIDv4
+    id        TEXT PRIMARY KEY,
     name      TEXT NOT NULL,
     type      TEXT NOT NULL CHECK(type IN ('asset','liability','equity','revenue','expense')),
-    commodity TEXT NOT NULL              -- e.g. 'INR', 'USD'
+    commodity TEXT NOT NULL
 );
 
 CREATE TABLE transactions (
     id    TEXT PRIMARY KEY,
-    date  TEXT NOT NULL,                 -- ISO 8601
+    date  TEXT NOT NULL,   -- ISO 8601
     payee TEXT NOT NULL,
     notes TEXT
 );
@@ -87,7 +143,7 @@ CREATE TABLE postings (
     id             TEXT PRIMARY KEY,
     transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
     account_id     TEXT NOT NULL REFERENCES accounts(id),
-    amount         INTEGER NOT NULL,     -- smallest currency unit (paise)
+    amount         INTEGER NOT NULL,   -- smallest currency unit (paise)
     commodity      TEXT NOT NULL
 );
 
@@ -96,7 +152,7 @@ CREATE INDEX idx_postings_account ON postings(account_id);
 CREATE INDEX idx_txn_date         ON transactions(date);
 ```
 
-**Invariant (enforced in Rust before every commit):**
+**Invariant (Rust-enforced before every commit):**
 
 > For every transaction t: SUM(postings.amount WHERE transaction_id = t.id) = 0
 
@@ -112,17 +168,17 @@ CREATE INDEX idx_txn_date         ON transactions(date);
 
 ```toml
 [dependencies]
-tauri                 = { version = "2", features = ["dialog"] }
-tauri-plugin-opener   = "2"
-tauri-plugin-dialog   = "2"
-serde                 = { version = "1", features = ["derive"] }
-serde_json            = "1"
+tauri               = { version = "2", features = ["dialog"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde               = { version = "1", features = ["derive"] }
+serde_json          = "1"
 
-# Encrypted SQLite — bundles SQLCipher + OpenSSL; no external install needed
+# Full-page AES-256 encrypted SQLite — bundles SQLCipher + vendored OpenSSL
 rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }
 
-# Async runtime
-tokio    = { version = "1", features = ["full"] }
+# Async runtime (Tauri 2 uses Tokio internally)
+tokio = { version = "1", features = ["full"] }
 
 # Parsing
 calamine = "0.26"
@@ -136,6 +192,9 @@ uuid      = { version = "1", features = ["v4"] }
 chrono    = { version = "0.4", features = ["serde"] }
 anyhow    = "1"
 thiserror = "1"
+
+[dev-dependencies]
+tempfile = "3"   # isolated DB per test
 ```
 
 #### New files
@@ -143,22 +202,24 @@ thiserror = "1"
 | Path | Purpose |
 |---|---|
 | `src-tauri/migrations/0001_initial.sql` | Full schema |
-| `src-tauri/src/db.rs` | Open encrypted DB, run migrations |
-| `src-tauri/src/error.rs` | `AppError` typed error enum |
+| `src-tauri/src/db.rs` | Open encrypted DB, run migrations, expose connection pool |
+| `src-tauri/src/error.rs` | `AppError` typed error enum; `impl From` for all crate errors |
 
 #### `src-tauri/src/lib.rs` changes
 
-- Open `rusqlite::Connection` immediately wrapped in `Arc<Mutex<Connection>>`
-- Store as `tauri::State`
+- Open `rusqlite::Connection` wrapped in `Arc<Mutex<Connection>>`
+- Store as `tauri::State<DbConn>` where `DbConn = Arc<Mutex<Connection>>`
 - Execute `PRAGMA key = '...'` immediately after open, before any query
-- Run migration SQL if tables do not exist
+- Run migration SQL idempotently (`CREATE TABLE IF NOT EXISTS`)
 - Enable `PRAGMA journal_mode = WAL` for crash-safe writes
 
 ---
 
 ### Phase 2 — Rust Backend: IPC Commands
 
-**Goal:** All backend logic exposed as typed Tauri commands.
+**Goal:** All backend logic exposed as typed, total Tauri commands.
+Every command returns `Result<T, String>` (serialised `AppError`).
+No command may panic. All resource acquisition is guarded by `?`.
 
 #### File layout
 
@@ -205,46 +266,55 @@ pub enum ParsedRow {
 }
 ```
 
+All matches on `ParsedRow` are exhaustive; the compiler enforces this.
+
+#### `commands/security.rs`
+
+| Command | Signature | Notes |
+|---|---|---|
+| `is_onboarding_done` | `() -> Result<bool, String>` | Reads `settings.onboarding_complete`; returns `false` if key absent OR value != `"true"` |
+| `setup_master_password` | `(password, default_currency) -> Result<(), String>` | Sets keyring key, writes `onboarding_complete=true` atomically with `default_commodity` in a single DB transaction |
+| `unlock` | `(password) -> Result<bool, String>` | Retrieves key from keyring, validates against DB via test query |
+| `change_master_password` | `(old, new) -> Result<(), String>` | Validates old, calls `PRAGMA rekey`, updates keyring |
+
+> **Onboarding atomicity:** `setup_master_password` writes
+> `onboarding_complete = true` in the SAME SQLite transaction as the
+> seed accounts and default commodity. If the app crashes between
+> writing the password and completing setup, `onboarding_complete`
+> remains absent and onboarding resumes from the beginning.
+
 #### `commands/accounts.rs`
 
 | Command | Signature |
 |---|---|
-| `list_accounts` | `() -> Vec<Account>` |
-| `create_account` | `(name, type, commodity) -> Account` |
-| `delete_account` | `(id) -> ()` |
-| `get_account_balance` | `(account_id) -> i64` |
+| `list_accounts` | `() -> Result<Vec<Account>, String>` |
+| `create_account` | `(name, type, commodity) -> Result<Account, String>` |
+| `delete_account` | `(id) -> Result<(), String>` |
+| `get_account_balance` | `(account_id) -> Result<i64, String>` |
 
 #### `commands/transactions.rs`
 
 | Command | Signature |
 |---|---|
-| `list_transactions` | `(limit, offset) -> Vec<TransactionWithPostings>` |
-| `commit_transaction` | `(date, payee, notes, postings) -> Transaction` — rejects if SUM != 0 |
-| `get_running_balances` | `(account_id) -> Vec<BalanceEntry>` |
-| `delete_transaction` | `(id) -> ()` |
+| `list_transactions` | `(limit, offset) -> Result<Vec<TransactionWithPostings>, String>` |
+| `commit_transaction` | `(date, payee, notes, postings) -> Result<Transaction, String>` — Err if SUM != 0 |
+| `get_running_balances` | `(account_id) -> Result<Vec<BalanceEntry>, String>` |
+| `delete_transaction` | `(id) -> Result<(), String>` |
 
 #### `commands/import.rs`
 
 | Command | Signature |
 |---|---|
-| `list_templates` | `() -> Vec<TemplateMeta>` |
-| `parse_statement` | `(file_path, template_name) -> Vec<ParsedRow>` — never panics |
-| `commit_import_batch` | `(Vec<ValidRow>) -> BatchResult` |
-
-#### `commands/security.rs`
-
-| Command | Signature |
-|---|---|
-| `is_first_run` | `() -> bool` |
-| `setup_master_password` | `(password, default_currency) -> ()` |
-| `unlock` | `(password) -> bool` |
-| `change_master_password` | `(old, new) -> ()` |
+| `list_templates` | `() -> Result<Vec<TemplateMeta>, String>` |
+| `parse_statement` | `(file_path, template_name) -> Result<Vec<ParsedRow>, String>` — never panics; all row errors become `ParsedRow::Invalid` |
+| `commit_import_batch` | `(rows: Vec<ValidRow>) -> Result<BatchResult, String>` |
 
 #### Auto-categorisation (`classifier.rs`)
 
-1. **Exact rule match** — TOML-defined regex patterns tried first
-2. **Naive Bayes fallback** — trains on `payee` text of historical transactions
-3. Low-confidence predictions surface as `Invalid` for human review
+1. **Exact rule match** — TOML-defined regex patterns tried first (with `size_limit` to prevent catastrophic backtracking)
+2. **Naive Bayes fallback** — trains on `payee` text of committed transactions; fixed vocabulary cap
+3. Confidence below threshold -> row surfaces as `Invalid` for human review
+4. All operations are pure functions over immutable inputs
 
 ---
 
@@ -272,6 +342,7 @@ pub enum ParsedRow {
 
 #### `src/routes/+layout.svelte`
 
+- Calls `is_onboarding_done()` on mount; redirects to `/onboarding` if false
 - Two-panel CSS grid: `[sidebar] [main]`
 - Sidebar collapses to bottom tabs at `< 640px`
 - Navigation: Dashboard / Accounts / Transactions / Import / Analytics / Settings
@@ -281,7 +352,9 @@ pub enum ParsedRow {
 
 ### Phase 4 — Onboarding Flow
 
-First-run flow — shown before the main UI when `is_first_run()` is true.
+First-run flow shown before the main UI when `is_onboarding_done()` is false.
+The wizard maintains step progress in local Svelte state only — not persisted
+until the final step to preserve atomicity.
 
 ```
 Screen 1: Welcome
@@ -289,9 +362,8 @@ Screen 1: Welcome
   [Get Started]
 
 Screen 2: Set Master Password
-  Password + Confirm fields
-  Strength indicator
-  [Next]
+  Password + Confirm fields, strength indicator
+  [Next]  <-- only enabled when passwords match
 
 Screen 3: Default Currency
   Searchable currency picker (INR default)
@@ -299,30 +371,37 @@ Screen 3: Default Currency
 
 Screen 4: Seed Accounts (optional)
   "Add default accounts: Checking, Savings, Cash, Credit Card"
-  [Finish Setup]
+  [Finish Setup]  <-- calls setup_master_password(); writes onboarding_complete=true
 ```
 
-`src/routes/onboarding/+page.svelte` — multi-step wizard.
-`+layout.svelte` redirects to `/onboarding` if `is_first_run()` returns true.
+`src/routes/onboarding/+page.svelte` — multi-step wizard component.
+`+layout.svelte` redirects to `/onboarding` if `is_onboarding_done()` returns false.
+All wizard state is local `$state`; the IPC call is made only on the final screen.
 
 ---
 
 ### Phase 5 — Core Pages
 
 #### Dashboard (`src/routes/+page.svelte`)
+
 - Net worth card (sum of all asset accounts)
-- 30-day income vs expense bar
-- Last 10 transactions
+- 30-day income vs expense summary bar
+- Last 10 transactions list
+- Quick-add transaction button
 
 #### Accounts (`src/routes/accounts/+page.svelte`)
+
 - Accounts grouped by type with running balances
 - Add account modal (name, type, commodity)
-- Delete with confirmation if account has postings
+- Delete with confirmation if account has associated postings
 
 #### Transactions (`src/routes/transactions/+page.svelte`)
+
 - Paginated ledger: date / payee / amount columns
 - Expand row to see postings
-- Manual entry form: client-side SUM=0 check + server-side enforcement
+- Manual entry form:
+  - Client side: `$derived` balance sum; Submit disabled when != 0
+  - Server side: Rust enforces SUM = 0 before writing; `Err` surfaced as toast
 
 ---
 
@@ -347,7 +426,17 @@ Screen 4: Seed Accounts (optional)
 
 - Valid rows: green highlight, ready to commit
 - Invalid rows: red highlight, inline-editable fields, re-validate on change
-- Batch commit calls `commit_import_batch()` — Rust validates each posting set
+- Batch commit calls `commit_import_batch()` — Rust validates each set
+
+Data flow is a pure pipeline:
+```
+File bytes
+  -> parse_statement()     [Rust: calamine/csv + TOML template]
+  -> Vec<ParsedRow>        [IPC boundary: serialised JSON]
+  -> triage UI state       [Svelte: pure $derived view]
+  -> user edits            [local state mutations only]
+  -> commit_import_batch() [Rust: DB transaction]
+```
 
 ---
 
@@ -357,7 +446,7 @@ Screen 4: Seed Accounts (optional)
 
 - Monthly income vs expense (SveltePlot bar chart)
 - Running balance per account over time (SveltePlot line chart)
-- Top spending categories (SveltePlot donut / area chart)
+- Top spending categories (SveltePlot area / donut chart)
 
 ---
 
@@ -386,7 +475,7 @@ Pre-bundled TOML templates shipped with the binary via `tauri::path::resource_di
 - Frontend never touches the filesystem directly
 
 #### DB lifecycle
-- Connection opened only after `unlock()` succeeds (key retrieved from keyring)
+- Connection opened only after `unlock()` succeeds
 - `PRAGMA rekey` executed on password change
 - `PRAGMA journal_mode = WAL` for crash-safe writes
 
@@ -394,37 +483,48 @@ Pre-bundled TOML templates shipped with the binary via `tauri::path::resource_di
 
 ## Testing Strategy (mandatory)
 
-### Unit Tests (Rust)
+Tests are written in this order: unit -> fuzz -> component -> E2E.
+A CI run must pass all layers before merge.
 
-Every module contains `#[cfg(test)]` tests.
+---
 
-| Module | Coverage |
+### Layer 1 — Unit Tests (Rust)
+
+Every module has `#[cfg(test)]` tests. Tests use `tempfile::NamedTempFile`
+for isolated in-memory or on-disk DBs so they never share state.
+
+| Module | What is tested |
 |---|---|
-| `template/` | TOML parse, regex extraction, multi-leg postings |
-| `parser/excel.rs` | Valid row -> Valid; corrupt cell -> Invalid (never panic) |
-| `parser/csv_parser.rs` | BOM, varying delimiters, empty rows, bad encoding |
-| `classifier.rs` | 0/1/N training samples; prediction stability |
-| `commands/transactions.rs` | SUM != 0 -> Err; SUM = 0 -> Ok |
-| `db.rs` | Migration idempotency (run twice -> no error) |
+| `template/` | TOML parse -> struct; regex extraction; multi-leg postings |
+| `parser/excel.rs` | Valid row -> `ParsedRow::Valid`; corrupt cell -> `ParsedRow::Invalid`; never panics |
+| `parser/csv_parser.rs` | BOM, varying delimiters, empty rows, malformed UTF-8 |
+| `classifier.rs` | 0 / 1 / N training samples; prediction stability; vocabulary cap |
+| `commands/transactions.rs` | SUM != 0 -> `Err`; SUM = 0 -> `Ok`; atomicity on partial failure |
+| `commands/security.rs` | `is_onboarding_done()` returns false when key absent; true only after `setup_master_password()` completes |
+| `db.rs` | Migration idempotency (run twice, no error); WAL mode confirmed |
 
 ```bash
 cd src-tauri && cargo test
 ```
 
-### Fuzz Testing (cargo-fuzz — recommended)
+---
 
-> `cargo-fuzz` requires nightly Rust and runs on Linux/macOS.
-> Use WSL2 on Windows or a Linux GitHub Actions runner for CI.
-> Alternative: `tauri-fuzz` (CrabNebula) for Tauri-aware IPC boundary testing.
+### Layer 2 — Fuzz Testing (cargo-fuzz)
 
-Fuzz targets:
+> `cargo-fuzz` requires nightly Rust and runs on Linux / macOS.
+> Use WSL2 locally or a Linux GitHub Actions runner for CI.
+> Alternative for Tauri-specific IPC boundary testing:
+> `tauri-fuzz` (CrabNebula) — https://github.com/crabnebula-dev/tauri-fuzz
 
-| Target | Input | Risk |
+All four fuzz targets exercise the zero-trust parsing surfaces.
+Fuzz targets are pure functions — they do not touch the DB.
+
+| Target | Input | Risk to guard against |
 |---|---|---|
 | `fuzz_parse_excel` | Arbitrary bytes as .xlsx | Panic / OOM in calamine |
 | `fuzz_parse_csv` | Arbitrary bytes as .csv | Malformed UTF-8, delimiter confusion |
 | `fuzz_apply_template` | Random TOML + row data | Regex catastrophic backtracking |
-| `fuzz_commit_transaction` | Random postings Vec | Balance invariant bypass |
+| `fuzz_commit_transaction` | Random `Vec<PostingInput>` | Balance invariant bypass |
 
 Setup:
 
@@ -446,33 +546,174 @@ cargo +nightly fuzz run fuzz_parse_excel -- -max_total_time=300
 Corpus: place at least one valid sample file per target in
 `src-tauri/fuzz/corpus/<target>/`.
 
-### Frontend Tests (Vitest)
+---
+
+### Layer 3 — Component Tests (Vitest)
 
 ```bash
-pnpm add -D vitest @testing-library/svelte
+pnpm add -D vitest @testing-library/svelte @vitest/coverage-v8
 ```
 
 | Test | Asserts |
 |---|---|
-| Triage grid: Valid row | Green highlight, no error text |
-| Triage grid: Invalid row | Red highlight, `error_reason` displayed |
-| Manual entry form | Submit disabled when SUM != 0 |
-| Balance card | Correct number formatting for INR (paise -> rupees) |
+| Triage grid: `ParsedRow::Valid` row | Green class applied; no error text rendered |
+| Triage grid: `ParsedRow::Invalid` row | Red class applied; `error_reason` text present |
+| Manual entry form | Submit button disabled when `$derived` SUM != 0 |
+| Manual entry form | Submit button enabled when SUM = 0 |
+| Balance card | Correct INR formatting (paise to rupees, locale-aware) |
+| Onboarding: step 2 | Next button disabled until passwords match |
+| Onboarding: step 4 | Calls `setup_master_password` IPC on Finish (mocked) |
+| Layout guard | Redirects to `/onboarding` when `is_onboarding_done()` mock returns false |
+
+All IPC calls are mocked via `@tauri-apps/api/mocks`.
 
 ```bash
 pnpm test
 ```
 
+---
+
+### Layer 4 — E2E Tests (Playwright + tauri-driver)
+
+**Reference:** See `../job-autofill/apps/extension/` for the project conventions
+(fixtures.ts pattern, `test:e2e:prepare` -> `test:e2e:run` script split,
+`data-testid` selectors, `trace: "on-first-retry"` reporter config).
+
+#### Why tauri-driver for E2E
+
+Standard Playwright targets the Chrome DevTools Protocol, which is only
+available via WebView2 (Windows). `tauri-driver` exposes a WebDriver-compatible
+endpoint over the Tauri app's native webview on all platforms, letting
+Playwright drive the real binary — not a mocked web page.
+
+```
+Playwright test runner
+    |
+    v
+tauri-driver (WebDriver server) <---> Tauri .exe / .app
+    |                                   |
+    v                                   v
+webview (WebView2 / WebKit)        Rust backend + DB
+```
+
+#### Setup
+
+```bash
+# Install tauri-driver (cross-platform WebDriver for Tauri)
+cargo install tauri-driver
+
+# Install Playwright
+pnpm add -D @playwright/test
+npx playwright install chromium   # only chromium needed for WebView2 on Windows
+```
+
+#### File layout
+
+```
+e2e/
+├── playwright.config.ts
+├── fixtures.ts            <- extends base test with app launch/teardown
+├── helpers/
+│   └── db.ts              <- reset DB between tests via temp dir
+├── onboarding.spec.ts
+├── accounts.spec.ts
+├── transactions.spec.ts
+├── import.spec.ts
+└── analytics.spec.ts
+```
+
+#### `playwright.config.ts`
+
+```typescript
+import { defineConfig } from "@playwright/test";
+
+export default defineConfig({
+  testDir: "./e2e",
+  fullyParallel: false,        // Tauri app is a single process; tests are sequential
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  workers: 1,
+  reporter: [["list"], ["html", { open: "never" }]],
+  use: {
+    trace: "on-first-retry",
+  },
+  // tauri-driver launches the built app and exposes a WebDriver endpoint
+  webServer: {
+    command: "cargo tauri build --debug && tauri-driver",
+    port: 4444,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
+});
+```
+
+#### `fixtures.ts`
+
+```typescript
+import { test as base } from "@playwright/test";
+import { spawn, type ChildProcess } from "child_process";
+
+// Extend with app process handle for clean teardown
+export const test = base.extend<{ appProcess: ChildProcess }>({
+  appProcess: async ({}, use) => {
+    const proc = spawn("tauri-driver", [], { stdio: "pipe" });
+    await use(proc);
+    proc.kill();
+  },
+});
+
+export const expect = base.expect;
+```
+
+#### E2E test scenarios (by spec file)
+
+**`onboarding.spec.ts`**
+- Fresh install: main UI is blocked; `/onboarding` is shown
+- Completing onboarding writes `onboarding_complete = true`; redirect to `/dashboard`
+- Closing mid-onboarding (simulated by restarting the app): onboarding resumes, not skipped
+
+**`accounts.spec.ts`**
+- Create one account of each type; verify all 5 appear in the sidebar
+- Delete an account with no postings; verify it disappears
+- Attempt to delete an account with existing postings; verify confirmation dialog
+
+**`transactions.spec.ts`**
+- Enter a balanced transaction; verify it appears in the ledger
+- Attempt an unbalanced transaction; verify error toast
+- Delete a transaction; verify it is removed from ledger
+
+**`import.spec.ts`**
+- Drop a valid HDFC CSV; select the `hdfc_savings` template; verify all rows parse as Valid
+- Commit; verify transactions appear in the ledger
+- Drop a corrupt file; verify Invalid rows appear in red; correct one inline; commit
+
+**`analytics.spec.ts`**
+- After committing test transactions; verify chart elements are rendered (`data-testid` selectors)
+
+#### Scripts in `package.json`
+
+```json
+"scripts": {
+  "test:e2e:prepare": "cargo tauri build --debug",
+  "test:e2e:run":     "playwright test",
+  "test:e2e:report":  "playwright show-report",
+  "test:e2e":         "pnpm test:e2e:prepare && pnpm test:e2e:run"
+}
+```
+
+---
+
 ### Manual Verification Checklist
 
-- [ ] First launch -> onboarding screens; main UI blocked until complete
+- [ ] Fresh install -> onboarding screens appear; main UI blocked until complete
+- [ ] Mid-onboarding quit -> re-launch resumes onboarding (NOT skipped to dashboard)
 - [ ] Wrong master password -> `unlock()` returns false, DB stays locked
 - [ ] Create accounts of all 5 types; verify balances start at 0
-- [ ] Balanced manual transaction -> saves
-- [ ] Unbalanced manual transaction -> Rust rejects with clear error
+- [ ] Balanced manual transaction -> saves; appears in ledger
+- [ ] Unbalanced manual transaction -> Rust rejects with clear error toast
 - [ ] Import happy path: valid HDFC CSV + template -> all rows green -> commit -> ledger updated
 - [ ] Import unhappy path: corrupt file -> red rows -> edit inline -> commit
-- [ ] `data.db` is unreadable as plaintext (hex editor shows ciphertext)
+- [ ] `data.db` is unreadable as plaintext (hex editor shows cipher text, not SQL keywords)
 - [ ] Window < 640px -> sidebar collapses to bottom tabs
 
 ---
@@ -481,47 +722,58 @@ pnpm test
 
 ```
 personal/
-├── Plan.md                          <- this file
+├── Plan.md                              <- this file
 ├── blueprint.md
-├── package.json                     [MODIFY] add vitest, svelteplot
+├── package.json                         [MODIFY] add vitest, svelteplot, playwright
 ├── pnpm-workspace.yaml
 ├── svelte.config.js
 ├── vite.config.js
 │
+├── e2e/                                 [NEW dir]
+│   ├── playwright.config.ts
+│   ├── fixtures.ts
+│   ├── helpers/
+│   │   └── db.ts
+│   ├── onboarding.spec.ts
+│   ├── accounts.spec.ts
+│   ├── transactions.spec.ts
+│   ├── import.spec.ts
+│   └── analytics.spec.ts
+│
 ├── src/
-│   ├── app.css                      [NEW] design tokens
+│   ├── app.css                          [NEW] design tokens
 │   ├── app.html
 │   └── routes/
-│       ├── +layout.svelte           [MODIFY] sidebar shell
+│       ├── +layout.svelte               [MODIFY] sidebar shell + onboarding guard
 │       ├── +layout.ts
-│       ├── +page.svelte             [MODIFY] dashboard
+│       ├── +page.svelte                 [MODIFY] dashboard
 │       ├── onboarding/
-│       │   └── +page.svelte         [NEW]
+│       │   └── +page.svelte             [NEW] multi-step wizard
 │       ├── accounts/
-│       │   └── +page.svelte         [NEW]
+│       │   └── +page.svelte             [NEW]
 │       ├── transactions/
-│       │   └── +page.svelte         [NEW]
+│       │   └── +page.svelte             [NEW]
 │       ├── import/
-│       │   └── +page.svelte         [NEW] triage grid
+│       │   └── +page.svelte             [NEW] triage grid
 │       ├── analytics/
-│       │   └── +page.svelte         [NEW]
+│       │   └── +page.svelte             [NEW]
 │       └── settings/
-│           └── +page.svelte         [NEW]
+│           └── +page.svelte             [NEW]
 │
 └── src-tauri/
-    ├── Cargo.toml                   [MODIFY] add all crates
-    ├── tauri.conf.json              [MODIFY] rename, harden CSP
+    ├── Cargo.toml                       [MODIFY] add all crates
+    ├── tauri.conf.json                  [MODIFY] rename, harden CSP
     ├── capabilities/
-    │   └── default.json             [MODIFY] restrict to dialog only
+    │   └── default.json                 [MODIFY] restrict to dialog only
     ├── migrations/
-    │   └── 0001_initial.sql         [NEW]
-    ├── templates/                   [NEW dir]
+    │   └── 0001_initial.sql             [NEW]
+    ├── templates/                       [NEW dir]
     │   ├── form_26as_tds.toml
     │   ├── hdfc_savings.toml
     │   ├── axis_bank.toml
     │   ├── sbi_statement.toml
     │   └── generic_csv.toml
-    ├── fuzz/                        [NEW dir]
+    ├── fuzz/                            [NEW dir]
     │   ├── Cargo.toml
     │   └── fuzz_targets/
     │       ├── fuzz_parse_excel.rs
@@ -529,25 +781,25 @@ personal/
     │       ├── fuzz_apply_template.rs
     │       └── fuzz_commit_transaction.rs
     └── src/
-        ├── lib.rs                   [MODIFY] bootstrap DB + state
+        ├── lib.rs                       [MODIFY] bootstrap DB + state
         ├── main.rs
-        ├── error.rs                 [NEW]
-        ├── models.rs                [NEW]
-        ├── db.rs                    [NEW]
-        ├── classifier.rs            [NEW]
+        ├── error.rs                     [NEW]
+        ├── models.rs                    [NEW]
+        ├── db.rs                        [NEW]
+        ├── classifier.rs                [NEW]
         ├── commands/
-        │   ├── mod.rs               [NEW]
-        │   ├── accounts.rs          [NEW]
-        │   ├── transactions.rs      [NEW]
-        │   ├── import.rs            [NEW]
-        │   └── security.rs          [NEW]
+        │   ├── mod.rs                   [NEW]
+        │   ├── accounts.rs              [NEW]
+        │   ├── transactions.rs          [NEW]
+        │   ├── import.rs                [NEW]
+        │   └── security.rs              [NEW]
         ├── parser/
-        │   ├── mod.rs               [NEW]
-        │   ├── excel.rs             [NEW]
-        │   └── csv_parser.rs        [NEW]
+        │   ├── mod.rs                   [NEW]
+        │   ├── excel.rs                 [NEW]
+        │   └── csv_parser.rs            [NEW]
         └── template/
-            ├── mod.rs               [NEW]
-            └── types.rs             [NEW]
+            ├── mod.rs                   [NEW]
+            └── types.rs                 [NEW]
 ```
 
 ---
@@ -557,15 +809,17 @@ personal/
 | # | Phase | Deliverable | Effort |
 |---|---|---|---|
 | 1 | Dependencies & DB | Encrypted DB opens on launch | Medium |
-| 2 | Rust IPC commands | All backend commands wired | High |
+| 2 | Rust IPC commands | All backend commands wired + unit tests | High |
 | 3 | Design system & layout | Nav shell, tokens, dark mode | Medium |
-| 4 | Onboarding | First-run wizard | Low |
+| 4 | Onboarding | `is_onboarding_done()` guard + multi-step wizard | Low |
 | 5 | Core pages | Accounts, Transactions, Dashboard | High |
-| 6 | Import / Triage Grid | Full parse -> review -> commit | High |
+| 6 | Import / Triage Grid | Full parse -> review -> commit pipeline | High |
 | 7 | Analytics charts | SveltePlot visualisations | Medium |
 | 8 | Import templates | 5 pre-bundled TOML templates | Low |
 | 9 | Security hardening | CSP, capabilities, WAL | Medium |
-| 10 | Tests | Unit + fuzz + E2E coverage | High |
+| 10 | Fuzz tests | 4 targets with corpus seeds | Medium |
+| 11 | Component tests | Vitest + @testing-library/svelte | Medium |
+| 12 | E2E tests | Playwright + tauri-driver; all spec files | High |
 
 ---
 
@@ -579,4 +833,6 @@ personal/
 | Account Aggregator APIs | Cloud dependency; binary bloat |
 | Column-level encryption | Metadata leakage; full-DB encryption mandated |
 | `sqlx` with sqlite feature | Cannot do full-page encryption without custom build |
-| FrankenSQLite | Requires nightly Rust; experimental in 2026 |
+| FrankenSQLite | Requires nightly Rust; experimental |
+| `is_first_run()` | Unidirectional flag; cannot detect mid-onboarding abort |
+| WebdriverIO for E2E | Official Tauri recommendation, but Playwright API is preferred per project conventions; tauri-driver exposes WebDriver so Playwright can drive it |
