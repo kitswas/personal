@@ -16,7 +16,7 @@ You do **NOT** need to install Node.js, pnpm, or Rust globally. `mise` will mana
 Clone the repository and install the required tools using `mise`:
 
 ```bash
-git clone <repository_url> personal
+git clone https://github.com/kitswas/personal.git
 cd personal
 mise install
 ```
@@ -40,6 +40,7 @@ Once `mise install` completes, install the project's JavaScript dependencies:
 
 ```bash
 pnpm install
+pnpm prepare # to set up git hooks
 ```
 
 ## 4. Development Workflow
@@ -52,15 +53,17 @@ pnpm tauri dev
 
 ### Validation Commands
 
-Before committing any code, ensure you run the validation checks (as required by `AGENTS.md`):
+#### Frontend validation
 
 ```bash
-# Frontend validation
 pnpm check      # Svelte type checking
 pnpm lint       # ESLint rules
 pnpm format     # Prettier formatting
+```
 
-# Backend validation
+#### Backend validation
+
+```bash
 cd src-tauri
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
