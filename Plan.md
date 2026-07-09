@@ -320,33 +320,125 @@ All matches on `ParsedRow` are exhaustive; the compiler enforces this.
 
 ### Phase 3 — Frontend: Design System & Layout Shell
 
-**Goal:** Working shell with sidebar nav, dark-mode-first design, fluid layout.
+**Goal:** Working shell with 3-pane layout, collapsible side panes, theme switcher, fully fluid.
+
+#### Layout specification
+
+```
+Wide (> 1024px) — both panes open         Nav collapsed        Detail collapsed
+┌──────┬──────────┬──────┐  ┌──┬──────────────┬──────┐  ┌──────┬───────────────┬─┐
+│ Nav  │  List    │Detail│  │≤ │ List (wider) │Detail│  │ Nav  │  List (wider) │>│
+│ [>]  │          │  [<] │  │  │              │  [<] │  │ [>]  │               │ │
+│  30% │   40%    │  30% │  │  │      ~65%    │  35% │  │  30% │      ~70%     │ │
+└──────┴──────────┴──────┘  └──┴──────────────┴──────┘  └──────┴───────────────┴─┘
+
+     Both collapsed: List takes full width (100%)
+     ┌──┬─────────────────────────┬──┐
+     │≤ │         List (full)     │> │
+     └──┴─────────────────────────┴──┘
+```
+
+**Pane responsibilities:**
+
+| Pane | Width (wide) | Content |
+|---|---|---|
+| **Left — Nav** | `~30%` | App name, tagline, nav links, account tree with live balances; collapse toggle `[>]` on its right edge |
+| **Center — List** | `~40%` (expands to fill collapsed pane space) | Primary content: transaction list, import triage grid, account ledger |
+| **Right — Detail** | `~30%` | Context panel: selected transaction postings, account summary card, quick-add form; collapse toggle `[<]` on its left edge |
+
+**Pane collapse rules:**
+
+- Each side pane collapses independently via its edge toggle button
+- Collapsed panes render as a narrow icon-strip (`~2.5rem`) — not zero-width — so
+  the toggle button remains reachable and the grid never fully breaks
+- The center list column takes the freed `fr` share automatically (CSS Grid)
+- Collapse state is stored in `localStorage` as `{ navCollapsed: bool, detailCollapsed: bool }`
+- On narrow viewports (`< 640px`) collapse toggles are hidden; the layout is
+  always single-pane with a bottom tab bar
+
+#### Theme system
+
+Three modes: **System** (default) / **Light** / **Dark**.
+
+- Preference stored in `localStorage` as `theme: 'system' | 'light' | 'dark'`
+- `localStorage` is used (not the encrypted DB) so the theme applies
+  immediately on startup, before the DB is unlocked — the onboarding screen
+  and unlock screen must also respect the theme
+- A `data-theme` attribute is set on `<html>` by a small inline script in
+  `app.html` (before the JS bundle loads) to prevent flash of wrong theme
+- Theme toggle lives in the nav pane header, alongside the app name
+
+```html
+<!-- app.html — inline script to set data-theme before paint -->
+<script>
+  const t = localStorage.getItem('theme') ?? 'system';
+  if (t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+</script>
+```
 
 #### `src/app.css` — design tokens (no hardcoded px for layout)
 
 ```css
-:root {
-  --color-bg:       hsl(220, 13%,  9%);
-  --color-surface:  hsl(220, 13%, 13%);
-  --color-border:   hsl(220, 13%, 20%);
-  --color-text:     hsl(220, 14%, 90%);
-  --color-muted:    hsl(220, 10%, 55%);
-  --color-accent:   hsl(252, 80%, 68%);
-  --color-positive: hsl(150, 65%, 48%);
-  --color-negative: hsl(  0, 72%, 58%);
-  --color-warning:  hsl( 38, 92%, 58%);
+/* Dark palette (default; also applied by [data-theme="dark"]) */
+:root,
+[data-theme="dark"] {
+  --color-bg:        hsl(220, 13%,  9%);
+  --color-surface:   hsl(220, 13%, 13%);
+  --color-border:    hsl(220, 13%, 20%);
+  --color-text:      hsl(220, 14%, 90%);
+  --color-muted:     hsl(220, 10%, 55%);
+  --color-accent:    hsl(252, 80%, 68%);
+  --color-positive:  hsl(150, 65%, 48%);
+  --color-negative:  hsl(  0, 72%, 58%);
+  --color-warning:   hsl( 38, 92%, 58%);
+}
 
-  --sidebar-w: 14%;   /* fluid; collapses on narrow viewports */
+/* Light palette */
+[data-theme="light"] {
+  --color-bg:        hsl(220, 20%, 97%);
+  --color-surface:   hsl(220, 20%, 100%);
+  --color-border:    hsl(220, 13%, 82%);
+  --color-text:      hsl(220, 14%, 12%);
+  --color-muted:     hsl(220, 10%, 48%);
+  --color-accent:    hsl(252, 70%, 55%);
+  --color-positive:  hsl(150, 55%, 36%);
+  --color-negative:  hsl(  0, 65%, 46%);
+  --color-warning:   hsl( 38, 85%, 42%);
+}
+
+/* 3-pane grid — fluid fractions, no px */
+:root {
+  --col-nav:         3fr;    /* ~30% */
+  --col-list:        4fr;    /* ~40% */
+  --col-detail:      3fr;    /* ~30% */
+  --col-collapsed:   2.5rem; /* icon-strip width when pane is collapsed */
 }
 ```
 
 #### `src/routes/+layout.svelte`
 
 - Calls `is_onboarding_done()` on mount; redirects to `/onboarding` if false
-- Two-panel CSS grid: `[sidebar] [main]`
-- Sidebar collapses to bottom tabs at `< 640px`
-- Navigation: Dashboard / Accounts / Transactions / Import / Analytics / Settings
-- "Personal" app name + tagline in sidebar header
+- Reads `localStorage` for `{ navCollapsed, detailCollapsed }` and `theme` on mount
+- CSS Grid with named areas: `"nav list detail"` — column widths derived from
+  collapse state via `$derived` rune:
+
+  ```
+  navCollapsed=false, detailCollapsed=false  →  3fr 4fr 3fr
+  navCollapsed=true,  detailCollapsed=false  →  2.5rem 4fr 3fr
+  navCollapsed=false, detailCollapsed=true   →  3fr 4fr 2.5rem
+  navCollapsed=true,  detailCollapsed=true   →  2.5rem 1fr 2.5rem
+  ```
+
+- **Wide (> 1024px):** grid with computed columns; both toggles visible
+- **Medium (640–1024px):** nav + list only; detail as overlay on selection
+- **Narrow (< 640px):** single column; bottom tab bar; collapse toggles hidden
+- Theme toggle (System / Light / Dark icon cycle) in nav header; writes to `localStorage` and updates `data-theme` on `<html>`
+- Navigation links: Dashboard / Accounts / Transactions / Import / Analytics / Settings
+- Account tree with live balances in nav pane (below nav links)
 
 ---
 
