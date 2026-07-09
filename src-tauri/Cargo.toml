@@ -1,8 +1,8 @@
 [package]
 name = "personal"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Personal Finance should be private."
+authors = ["kitswas"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -20,5 +20,35 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Full-page AES-256 encrypted SQLite — bundles SQLCipher + vendored OpenSSL.
+# See ADR 0001 for the rationale.
+rusqlite = { version = "0.40.1", features = ["bundled-sqlcipher"] }
+
+# Async runtime — used for spawn_blocking in command handlers.
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+# OS keyring — stores the master DB key; never writes the key to disk.
+keyring = "4.1.4"
+
+# Excel / CSV parsing for import pipeline (Phase 2+).
+calamine = "0.36.0"
+csv = "1"
+
+# TOML for import templates (Phase 2+).
+toml = "1.1.2"
+
+# Regex with size_limit to prevent catastrophic backtracking (Phase 2+).
+regex = "1.13"
+
+# Utilities.
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+# Isolated temporary DB files per test — no shared state between tests.
+tempfile = "3"

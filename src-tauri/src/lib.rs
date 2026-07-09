@@ -1,14 +1,41 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-	format!("Hello, {}! You've been greeted from Rust!", name)
+#![deny(unsafe_code)]
+// Deny unsafe in all application code per AGENTS.md §6 and ADR 0001.
+
+pub mod commands;
+pub mod db;
+pub mod error;
+pub mod models;
+
+use std::sync::{Arc, Mutex};
+
+use tauri::Manager;
+
+/// Shared application state injected into every Tauri command handler.
+pub struct AppState {
+	/// The encrypted SQLite connection.
+	/// `None` until `unlock()` succeeds.
+	/// Wrapped in `Arc<Mutex<_>>` so it can be cloned across `spawn_blocking` closures.
+	pub db: Arc<Mutex<Option<rusqlite::Connection>>>,
+
+	/// Filesystem path to the database file.
+	pub db_path: std::path::PathBuf,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	tauri::Builder::default()
 		.plugin(tauri_plugin_opener::init())
-		.invoke_handler(tauri::generate_handler![greet])
+		.invoke_handler(tauri::generate_handler![
+			commands::accounts::list_accounts,
+			commands::accounts::create_account,
+			commands::accounts::update_account,
+			commands::accounts::delete_account,
+			commands::accounts::get_default_commodity,
+			commands::security::is_onboarding_done,
+			commands::security::unlock,
+			commands::security::setup_master_password,
+			commands::security::change_master_password
+		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
 }
