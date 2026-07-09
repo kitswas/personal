@@ -3,7 +3,12 @@
 	"out": "docs/html",
 	"tsconfig": "typedoc.tsconfig.json",
 	"plugin": ["typedoc-plugin-mermaid"],
-	"exclude": ["**/__tests__/**", "**/*.spec.ts", "**/*.test.ts", "**/*.test.svelte"],
+	"exclude": [
+		"**/__tests__/**",
+		"**/*.spec.ts",
+		"**/*.test.ts",
+		"**/*.test.svelte"
+	],
 	"includeVersion": true,
 	"excludeExternals": true,
 	"entryPointStrategy": "expand"

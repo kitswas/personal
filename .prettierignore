@@ -1,8 +1,0 @@
-build/
-.svelte-kit/
-dist/
-src-tauri/target/
-pnpm-lock.yaml
-Cargo.lock
-docs/html/
-*.md

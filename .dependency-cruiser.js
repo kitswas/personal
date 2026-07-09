@@ -54,7 +54,12 @@ module.exports = {
 				"Don't allow dependencies to packages not in package.json. This catch missing deps early.",
 			from: {},
 			to: {
-				dependencyTypes: ["unknown", "undetermined", "npm-no-pkg", "npm-unknown"],
+				dependencyTypes: [
+					"unknown",
+					"undetermined",
+					"npm-no-pkg",
+					"npm-unknown",
+				],
 			},
 		},
 		{
