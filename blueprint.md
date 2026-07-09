@@ -142,7 +142,7 @@ CREATE INDEX idx_transactions_date ON transactions(date);
 
 Rust evaluates TOML templates to extract data. TOML is explicitly chosen over JSON to eliminate "Regex escape hell" by utilizing literal strings (`'...'`), supporting inline comments, and making multi-leg postings highly readable via arrays of tables (`[[...]]`).
 
-_Example: Form 26AS (TDS) Template_
+#### Example: Form 26AS (TDS) Template
 
 ```toml
 template_name = "Form 26AS TDS"
