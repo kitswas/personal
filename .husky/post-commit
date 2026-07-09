@@ -1,0 +1,1 @@
+pnpm format && cargo fmt --manifest-path src-tauri/Cargo.toml --all

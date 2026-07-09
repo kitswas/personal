@@ -9,12 +9,12 @@ This template should help get you started developing with Tauri, SvelteKit and T
 ## Commands
 
 To get started run:
-  cd Personal
-  pnpm install
-  pnpm tauri android init
+cd Personal
+pnpm install
+pnpm tauri android init
 
 For Desktop development, run:
-  pnpm tauri dev
+pnpm tauri dev
 
 For Android development, run:
-  pnpm tauri android dev
+pnpm tauri android dev

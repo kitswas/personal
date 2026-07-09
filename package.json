@@ -1,29 +1,59 @@
 {
-  "name": "personal",
-  "version": "0.1.0",
-  "description": "",
-  "type": "module",
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "tauri": "tauri"
-  },
-  "license": "MIT",
-  "dependencies": {
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2"
-  },
-  "devDependencies": {
-    "@sveltejs/adapter-static": "^3.0.6",
-    "@sveltejs/kit": "^2.9.0",
-    "@sveltejs/vite-plugin-svelte": "^5.0.0",
-    "svelte": "^5.0.0",
-    "svelte-check": "^4.0.0",
-    "typescript": "~5.6.2",
-    "vite": "^6.0.3",
-    "@tauri-apps/cli": "^2"
-  }
+	"name": "personal",
+	"version": "0.1.0",
+	"description": "Personal Finance should be private.",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"tauri": "tauri",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"lint": "eslint src e2e --max-warnings 0",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"type-check": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"test:e2e:prepare": "tauri build --debug",
+		"test:e2e:run": "playwright test",
+		"test:e2e:report": "playwright show-report",
+		"test:e2e": "pnpm test:e2e:prepare && pnpm test:e2e:run",
+		"docs:graph": "depcruise src --include-only \"src/\" --output-type dot > docs/dependency-graph.dot && dot -Tsvg docs/dependency-graph.dot -o docs/dependency-graph.svg",
+		"docs:typedoc": "typedoc --options typedoc.json",
+		"docs:all": "pnpm docs:graph && pnpm docs:typedoc",
+		"prepare": "husky"
+	},
+	"license": "MIT",
+	"dependencies": {
+		"@tauri-apps/api": "^2",
+		"@tauri-apps/plugin-opener": "^2"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.0.0",
+		"@playwright/test": "^1.49.0",
+		"@sveltejs/adapter-static": "^3.0.6",
+		"@sveltejs/kit": "^2.9.0",
+		"@sveltejs/vite-plugin-svelte": "^5.0.0",
+		"@tauri-apps/cli": "^2",
+		"@testing-library/svelte": "^5.4.2",
+		"@vitest/coverage-v8": "^4.0.0",
+		"dependency-cruiser": "^17.3.0",
+		"eslint": "^9.0.0",
+		"eslint-plugin-svelte": "^2.46.0",
+		"globals": "^15.0.0",
+		"husky": "^9.1.7",
+		"prettier": "^3.4.0",
+		"prettier-plugin-svelte": "^3.3.0",
+		"svelte": "^5.0.0",
+		"svelte-check": "^4.0.0",
+		"typedoc": "^0.28.0",
+		"typedoc-plugin-mermaid": "^1.12.0",
+		"typescript": "~5.6.2",
+		"typescript-eslint": "^8.0.0",
+		"vite": "^6.0.3",
+		"vitest": "^4.0.0"
+	}
 }

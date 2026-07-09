@@ -11,12 +11,12 @@ WebKit (which does not). This complicates E2E automation.
 
 Options considered:
 
-| Option | Drives real binary | Cross-platform | API preference |
-|---|---|---|---|
-| WebdriverIO + `@wdio/tauri-service` | Yes — official Tauri support | Yes | Unfamiliar |
-| Playwright + `tauri-driver` | Yes — WebDriver bridge | Yes | **Preferred** (see below) |
-| Playwright against a mocked dev server | No — Rust backend not exercised | Yes | Preferred |
-| `tauri-fuzz` (CrabNebula) | Partial — IPC boundary only | Linux/macOS | For fuzz layer, not E2E |
+| Option                                 | Drives real binary              | Cross-platform | API preference            |
+| -------------------------------------- | ------------------------------- | -------------- | ------------------------- |
+| WebdriverIO + `@wdio/tauri-service`    | Yes — official Tauri support    | Yes            | Unfamiliar                |
+| Playwright + `tauri-driver`            | Yes — WebDriver bridge          | Yes            | **Preferred** (see below) |
+| Playwright against a mocked dev server | No — Rust backend not exercised | Yes            | Preferred                 |
+| `tauri-fuzz` (CrabNebula)              | Partial — IPC boundary only     | Linux/macOS    | For fuzz layer, not E2E   |
 
 **Why not WebdriverIO:**
 WebdriverIO is the officially recommended tool for Tauri E2E testing. However,

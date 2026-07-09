@@ -19,12 +19,12 @@ corrupt running balances, or produce incorrect tax totals.
 
 Alternatives considered:
 
-| Approach | Pros | Cons |
-|---|---|---|
-| `f64` / SQLite `REAL` | Native in JS and SQL | Rounding errors; cannot guarantee SUM = 0 |
-| `Decimal` crate (arbitrary precision) | Exact; handles multi-currency arithmetic | Heavier; not natively stored in SQLite |
-| `INTEGER` (smallest unit) | Exact; native SQLite type; zero overhead | Requires explicit scaling in UI layer |
-| `TEXT` (string decimals) | Exact representation | No native arithmetic; slow aggregation |
+| Approach                              | Pros                                     | Cons                                      |
+| ------------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| `f64` / SQLite `REAL`                 | Native in JS and SQL                     | Rounding errors; cannot guarantee SUM = 0 |
+| `Decimal` crate (arbitrary precision) | Exact; handles multi-currency arithmetic | Heavier; not natively stored in SQLite    |
+| `INTEGER` (smallest unit)             | Exact; native SQLite type; zero overhead | Requires explicit scaling in UI layer     |
+| `TEXT` (string decimals)              | Exact representation                     | No native arithmetic; slow aggregation    |
 
 ## Decision
 

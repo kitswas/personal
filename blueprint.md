@@ -6,45 +6,45 @@
 
 This application relies on a strict separation of concerns. The Rust backend acts as an "iron-clad sandbox" that absorbs malformed data and protects the encrypted SQLite database, while the frontend provides a high-density, fluid native-feeling UI.
 
-* **Runtime:** Tauri (v2) - Tiny footprint, cross-platform (Desktop + future iOS/Android mobile targets).
+- **Runtime:** Tauri (v2) - Tiny footprint, cross-platform (Desktop + future iOS/Android mobile targets).
 
-* **Backend:** Rust
+- **Backend:** Rust
 
-* **Database:** SQLite (embedded, local, row-based OLTP) encrypted via `sqlcipher`.
+- **Database:** SQLite (embedded, local, row-based OLTP) encrypted via `sqlcipher`.
 
-* **Frontend Package Manager:** `pnpm` (Strictly Enforced).
+- **Frontend Package Manager:** `pnpm` (Strictly Enforced).
 
-* **Styling & Components:** Oat.ink (<https://oat.ink/components/>) - Minimal, accessible components. Plain CSS utilizing fluid/relative units (No Tailwind).
+- **Styling & Components:** Oat.ink (<https://oat.ink/components/>) - Minimal, accessible components. Plain CSS utilizing fluid/relative units (No Tailwind).
 
-* **Layout/Text Reflow:** `pretext` (<https://github.com/chenglou/pretext>) to guarantee precise typographic reflowing across varying screen sizes.
+- **Layout/Text Reflow:** `pretext` (<https://github.com/chenglou/pretext>) to guarantee precise typographic reflowing across varying screen sizes.
 
-* **Key Rust Crates:** `calamine` (Excel), `csv`, `sqlx` (Compile-time SQL), `serde`, `regex`, `keyring` (OS Keystore), `sqlcipher`.
+- **Key Rust Crates:** `calamine` (Excel), `csv`, `sqlx` (Compile-time SQL), `serde`, `regex`, `keyring` (OS Keystore), `sqlcipher`.
 
 ### 1.1 Frontend Architectural Paths (Choose One)
 
 The backend API contract (Tauri IPC) is identical for both paths.
 
-* **Path A: The Reactive Path (Svelte)**
+- **Path A: The Reactive Path (Svelte)**
 
-  * **Framework:** Svelte 5 + TypeScript
+  - **Framework:** Svelte 5 + TypeScript
 
-  * **Data Visualization:** SveltePlot
+  - **Data Visualization:** SveltePlot
 
-  * **Pros:** Svelte handles the complex UI state changes in the Triage grid automatically.
+  - **Pros:** Svelte handles the complex UI state changes in the Triage grid automatically.
 
-* **Path B: The Minimalist Path (Vanilla TS + Micro-libs)**
+- **Path B: The Minimalist Path (Vanilla TS + Micro-libs)**
 
-  * **Framework:** Vanilla TypeScript + HTML
+  - **Framework:** Vanilla TypeScript + HTML
 
-  * **Routing:** `tinyrouter.js` (\~950b)
+  - **Routing:** `tinyrouter.js` (\~950b)
 
-  * **Data Visualization:** Apache ECharts or uPlot
+  - **Data Visualization:** Apache ECharts or uPlot
 
-  * **Oat Extensions:** `oat-upload`, `oat-table`, `oat-chips`, `oat-animate`.
+  - **Oat Extensions:** `oat-upload`, `oat-table`, `oat-chips`, `oat-animate`.
 
-  * **Zero-Dep Utilities:** `floatype.js`, `highlighted-input.js`, `dragmove.js`.
+  - **Zero-Dep Utilities:** `floatype.js`, `highlighted-input.js`, `dragmove.js`.
 
-  * **Pros:** Zero framework overhead, absolute smallest binary size.
+  - **Pros:** Zero framework overhead, absolute smallest binary size.
 
 ### 1.2 System Architecture Diagram
 
@@ -93,10 +93,10 @@ graph TD
 
 The application adheres to a Zero-Trust and Defense-in-Depth model, assuming all ingested files and local environments could be compromised.
 
-* **Encryption at Rest:** The SQLite database is strictly encrypted using AES-256 via `sqlcipher`. Financial data is never stored in plaintext on the disk.
-* **Native Key Management:** The master password/encryption key is NEVER stored in a config file or `localStorage`. Rust securely interfaces with the OS-level credential manager (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux, Keystore on Android) using the `keyring` crate.
-* **Zero-Trust Parsing:** Bank statements (Excel/CSV) are treated as hostile input. Parsers must fail safely, preventing memory leaks, buffer overflows, or injection attacks during data triage.
-* **Data in Motion:** All IPC communication happens entirely locally within the Tauri memory space. If future network plugins are added, TLS 1.3 is strictly mandated.
+- **Encryption at Rest:** The SQLite database is strictly encrypted using AES-256 via `sqlcipher`. Financial data is never stored in plaintext on the disk.
+- **Native Key Management:** The master password/encryption key is NEVER stored in a config file or `localStorage`. Rust securely interfaces with the OS-level credential manager (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux, Keystore on Android) using the `keyring` crate.
+- **Zero-Trust Parsing:** Bank statements (Excel/CSV) are treated as hostile input. Parsers must fail safely, preventing memory leaks, buffer overflows, or injection attacks during data triage.
+- **Data in Motion:** All IPC communication happens entirely locally within the Tauri memory space. If future network plugins are added, TLS 1.3 is strictly mandated.
 
 ## 3. DATABASE SCHEMA & RULES (Pure SQLite)
 
@@ -114,17 +114,17 @@ CREATE TABLE accounts (
 -- 2. TRANSACTIONS
 CREATE TABLE transactions (
     id TEXT PRIMARY KEY,
-    date TEXT NOT NULL,       
+    date TEXT NOT NULL,
     payee TEXT NOT NULL,
     notes TEXT
 );
 
--- 3. POSTINGS 
+-- 3. POSTINGS
 CREATE TABLE postings (
     id TEXT PRIMARY KEY,
     transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
     account_id TEXT NOT NULL REFERENCES accounts(id),
-    amount INTEGER NOT NULL,  
+    amount INTEGER NOT NULL,
     commodity TEXT NOT NULL DEFAULT 'INR'
 );
 
@@ -142,7 +142,7 @@ CREATE INDEX idx_transactions_date ON transactions(date);
 
 Rust evaluates TOML templates to extract data. TOML is explicitly chosen over JSON to eliminate "Regex escape hell" by utilizing literal strings (`'...'`), supporting inline comments, and making multi-leg postings highly readable via arrays of tables (`[[...]]`).
 
-*Example: Form 26AS (TDS) Template*
+_Example: Form 26AS (TDS) Template_
 
 ```toml
 template_name = "Form 26AS TDS"
@@ -168,7 +168,7 @@ tan = "TAN of Deductor"
 description = "Extract Payee from complex UPI strings"
 source_column = "Details"
 # Using single quotes means \d and \s don't need to be escaped like in JSON!
-regex = 'UPI/(?:DR|CR)/\d+/([^/]+)' 
+regex = 'UPI/(?:DR|CR)/\d+/([^/]+)'
 target_field = "payee"
 
 # Multi-leg postings as an array of tables
@@ -215,26 +215,26 @@ pub enum ParsedRow {
 
 The UI must be entirely fluid. Hardcoded pixel dimensions are forbidden to ensure a seamless transition to Tauri's mobile targets (iOS/Android).
 
-* **Global Layout:** Uses percentages (`%`), fractions (`fr`), and viewport units (`vw`/`vh`).
-* **Sidebar:** Reflows from a fractional side-panel on desktop to a hidden/bottom-tab navigation on smaller mobile viewports.
-* **Typography & Content Scaling:** Managed via `pretext` to ensure text scales and wraps predictably across devices without breaking oat.ink components.
-* **Triage Data Grid:** UI renders `Vec<ParsedRow>` using `oat-table`. Invalid rows are highlighted for human-in-the-loop correction.
+- **Global Layout:** Uses percentages (`%`), fractions (`fr`), and viewport units (`vw`/`vh`).
+- **Sidebar:** Reflows from a fractional side-panel on desktop to a hidden/bottom-tab navigation on smaller mobile viewports.
+- **Typography & Content Scaling:** Managed via `pretext` to ensure text scales and wraps predictably across devices without breaking oat.ink components.
+- **Triage Data Grid:** UI renders `Vec<ParsedRow>` using `oat-table`. Invalid rows are highlighted for human-in-the-loop correction.
 
 ## 6. REJECTED ARCHITECTURES & REFERENCES
 
 To maintain the project's focus, the following technologies were explicitly evaluated and rejected:
 
-* **Tailwind CSS & Fixed Pixels:** Stripped out in favor of the minimalistic `oat.ink` component library and fluid/percentage-based layouts.
-* **npm/yarn/bun:** Disallowed. Only `pnpm` is permitted.
-* **TigerBeetle & hledger:** Dual-database sync architectures cause fragile race conditions. Rejected for pure local SQLite.
-* **Account Aggregator APIs & ML Models:** Cloud dependencies and binary bloat rejected in favor of local parsing and statistics.
+- **Tailwind CSS & Fixed Pixels:** Stripped out in favor of the minimalistic `oat.ink` component library and fluid/percentage-based layouts.
+- **npm/yarn/bun:** Disallowed. Only `pnpm` is permitted.
+- **TigerBeetle & hledger:** Dual-database sync architectures cause fragile race conditions. Rejected for pure local SQLite.
+- **Account Aggregator APIs & ML Models:** Cloud dependencies and binary bloat rejected in favor of local parsing and statistics.
 
 ### Links & Context
 
-* **Oat.ink Components & Extensions:** `https://oat.ink/components/`, `https://oat.ink/extensions/`
-* **Zero-Dep Libs:** `tinyrouter.js`, `floatype.js`, `highlighted-input.js`, `dragmove.js`
-* **Pretext:** `https://github.com/chenglou/pretext` (Typography/reflow handling).
-* **Paisa:** `https://github.com/ananthakumaran/paisa` (Inspiration for UI, lesson on text-to-SQL sync fragility).
-* **TigerBeetle:** `https://tigerbeetle.com/` (Inspiration for strict correctness).
-* **SveltePlot:** `https://svelteplot.dev/` (Grammar of graphics for Analytics).
-* **Sahamati Standards:** `https://github.com/Sahamati/account-aggregator-standards` (Source of truth for Indian financial schema mapping).
+- **Oat.ink Components & Extensions:** `https://oat.ink/components/`, `https://oat.ink/extensions/`
+- **Zero-Dep Libs:** `tinyrouter.js`, `floatype.js`, `highlighted-input.js`, `dragmove.js`
+- **Pretext:** `https://github.com/chenglou/pretext` (Typography/reflow handling).
+- **Paisa:** `https://github.com/ananthakumaran/paisa` (Inspiration for UI, lesson on text-to-SQL sync fragility).
+- **TigerBeetle:** `https://tigerbeetle.com/` (Inspiration for strict correctness).
+- **SveltePlot:** `https://svelteplot.dev/` (Grammar of graphics for Analytics).
+- **Sahamati Standards:** `https://github.com/Sahamati/account-aggregator-standards` (Source of truth for Indian financial schema mapping).

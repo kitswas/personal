@@ -11,20 +11,20 @@ the master key never touches the disk.
 
 **Stack (locked):**
 
-| Layer | Choice | Reason |
-|---|---|---|
-| Runtime | Tauri v2 | Tiny footprint, future mobile targets |
-| Frontend | Svelte 5 + TypeScript | Path A from blueprint; already scaffolded |
-| Styling | Oat.ink + plain CSS (fluid units) | Blueprint requirement; no Tailwind |
-| Charts | SveltePlot | Grammar-of-graphics for analytics |
-| Backend | Rust | Memory-safe systems language |
-| DB | SQLite encrypted via SQLCipher | Full-page AES-256 encryption at rest |
-| Encryption driver | `rusqlite` with `bundled-sqlcipher-vendored-openssl` | Self-contained build; no external OpenSSL install on Windows |
-| Key storage | `keyring` crate (OS Keychain / Credential Manager) | Key never written to disk |
-| Excel parsing | `calamine` | Handles .xls / .xlsx without COM |
-| CSV parsing | `csv` crate | Zero-allocation reader |
-| Template format | TOML | Literal strings eliminate regex-escape hell |
-| E2E testing | Playwright (via `tauri-driver` + WebDriver) | True desktop automation against native webview |
+| Layer             | Choice                                             | Reason                                             |
+| ----------------- | -------------------------------------------------- | -------------------------------------------------- |
+| Runtime           | Tauri v2                                           | Tiny footprint, future mobile targets              |
+| Frontend          | Svelte 5 + TypeScript                              | Path A from blueprint; already scaffolded          |
+| Styling           | Oat.ink + plain CSS (fluid units)                  | Blueprint requirement; no Tailwind                 |
+| Charts            | SveltePlot                                         | Grammar-of-graphics for analytics                  |
+| Backend           | Rust                                               | Memory-safe systems language                       |
+| DB                | SQLite encrypted via SQLCipher                     | Full-page AES-256 encryption at rest               |
+| Encryption driver | `rusqlite` with `bundled-sqlcipher`                | Requires external OpenSSL/LibreSSL to be installed |
+| Key storage       | `keyring` crate (OS Keychain / Credential Manager) | Key never written to disk                          |
+| Excel parsing     | `calamine`                                         | Handles .xls / .xlsx without COM                   |
+| CSV parsing       | `csv` crate                                        | Zero-allocation reader                             |
+| Template format   | TOML                                               | Literal strings eliminate regex-escape hell        |
+| E2E testing       | Playwright (via `tauri-driver` + WebDriver)        | True desktop automation against native webview     |
 
 ---
 
@@ -49,14 +49,14 @@ terminate and every reachable state must satisfy the program invariants.
 
 ### Total Correctness Guarantees
 
-| Property | Mechanism |
-|---|---|
-| **Termination** | All recursive functions are bounded (no unbounded loops in parser; regex engine has a timeout via `regex::RegexBuilder::size_limit`). Naive Bayes uses a fixed feature vocabulary. |
-| **Partial correctness** | Every IPC command returns `Result<T, AppError>`; the frontend maps `Err` variants to visible error UI — no silent failures. |
-| **No unhandled exceptions** | TypeScript `strict` mode; `noUncheckedIndexedAccess`; all `Promise` chains end in `.catch()` or `try/catch`. |
-| **No data races** | Single `Arc<Mutex<Connection>>` for the DB; `Mutex` is held only for the duration of each SQL statement, then released. All Tauri commands are `async` and run on Tokio's thread pool. |
-| **No undefined behaviour** | No `unsafe` in application code. Clippy `#![deny(unsafe_code)]` on library crates. |
-| **All branches covered** | Rust enums (e.g., `ParsedRow`) are exhaustively matched. TypeScript discriminated unions are exhaustively narrowed. |
+| Property                    | Mechanism                                                                                                                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Termination**             | All recursive functions are bounded (no unbounded loops in parser; regex engine has a timeout via `regex::RegexBuilder::size_limit`). Naive Bayes uses a fixed feature vocabulary.     |
+| **Partial correctness**     | Every IPC command returns `Result<T, AppError>`; the frontend maps `Err` variants to visible error UI — no silent failures.                                                            |
+| **No unhandled exceptions** | TypeScript `strict` mode; `noUncheckedIndexedAccess`; all `Promise` chains end in `.catch()` or `try/catch`.                                                                           |
+| **No data races**           | Single `Arc<Mutex<Connection>>` for the DB; `Mutex` is held only for the duration of each SQL statement, then released. All Tauri commands are `async` and run on Tokio's thread pool. |
+| **No undefined behaviour**  | No `unsafe` in application code. Clippy `#![deny(unsafe_code)]` on library crates.                                                                                                     |
+| **All branches covered**    | Rust enums (e.g., `ParsedRow`) are exhaustively matched. TypeScript discriminated unions are exhaustively narrowed.                                                                    |
 
 ### Onboarding Guard — `is_onboarding_done()`
 
@@ -160,6 +160,17 @@ CREATE INDEX idx_txn_date         ON transactions(date);
 
 ## Phases
 
+### Phase 0 — Tooling & CI Setup
+
+**Goal:** Reproducible, strictly-versioned developer environment with fully automated validation.
+
+- **`mise`:** Declare Node (LTS), pnpm, Rust (stable), and other dev tools via `mise.toml` to ensure 100% environment reproducibility across machines.
+- **Linting & Formatting:** Enforce ESLint, Prettier, and TypeScript checks across the entire codebase (frontend and tests).
+- **CI/CD:** GitHub Actions for automated testing, linting, and docs generation.
+- **Documentation:** Generate `Build.md` to guide developers on prerequisites and setup.
+
+---
+
 ### Phase 1 — Dependencies & DB Foundation
 
 **Goal:** Compilable Tauri app that opens an encrypted database on launch.
@@ -174,8 +185,8 @@ tauri-plugin-dialog = "2"
 serde               = { version = "1", features = ["derive"] }
 serde_json          = "1"
 
-# Full-page AES-256 encrypted SQLite — bundles SQLCipher + vendored OpenSSL
-rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }
+# Full-page AES-256 encrypted SQLite — bundles SQLCipher
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
 
 # Async runtime (Tauri 2 uses Tokio internally)
 tokio = { version = "1", features = ["full"] }
@@ -199,11 +210,11 @@ tempfile = "3"   # isolated DB per test
 
 #### New files
 
-| Path | Purpose |
-|---|---|
-| `src-tauri/migrations/0001_initial.sql` | Full schema |
-| `src-tauri/src/db.rs` | Open encrypted DB, run migrations, expose connection pool |
-| `src-tauri/src/error.rs` | `AppError` typed error enum; `impl From` for all crate errors |
+| Path                                    | Purpose                                                       |
+| --------------------------------------- | ------------------------------------------------------------- |
+| `src-tauri/migrations/0001_initial.sql` | Full schema                                                   |
+| `src-tauri/src/db.rs`                   | Open encrypted DB, run migrations, expose connection pool     |
+| `src-tauri/src/error.rs`                | `AppError` typed error enum; `impl From` for all crate errors |
 
 #### `src-tauri/src/lib.rs` changes
 
@@ -270,12 +281,12 @@ All matches on `ParsedRow` are exhaustive; the compiler enforces this.
 
 #### `commands/security.rs`
 
-| Command | Signature | Notes |
-|---|---|---|
-| `is_onboarding_done` | `() -> Result<bool, String>` | Reads `settings.onboarding_complete`; returns `false` if key absent OR value != `"true"` |
-| `setup_master_password` | `(password, default_currency) -> Result<(), String>` | Sets keyring key, writes `onboarding_complete=true` atomically with `default_commodity` in a single DB transaction |
-| `unlock` | `(password) -> Result<bool, String>` | Retrieves key from keyring, validates against DB via test query |
-| `change_master_password` | `(old, new) -> Result<(), String>` | Validates old, calls `PRAGMA rekey`, updates keyring |
+| Command                  | Signature                                            | Notes                                                                                                              |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `is_onboarding_done`     | `() -> Result<bool, String>`                         | Reads `settings.onboarding_complete`; returns `false` if key absent OR value != `"true"`                           |
+| `setup_master_password`  | `(password, default_currency) -> Result<(), String>` | Sets keyring key, writes `onboarding_complete=true` atomically with `default_commodity` in a single DB transaction |
+| `unlock`                 | `(password) -> Result<bool, String>`                 | Retrieves key from keyring, validates against DB via test query                                                    |
+| `change_master_password` | `(old, new) -> Result<(), String>`                   | Validates old, calls `PRAGMA rekey`, updates keyring                                                               |
 
 > **Onboarding atomicity:** `setup_master_password` writes
 > `onboarding_complete = true` in the SAME SQLite transaction as the
@@ -285,29 +296,29 @@ All matches on `ParsedRow` are exhaustive; the compiler enforces this.
 
 #### `commands/accounts.rs`
 
-| Command | Signature |
-|---|---|
-| `list_accounts` | `() -> Result<Vec<Account>, String>` |
-| `create_account` | `(name, type, commodity) -> Result<Account, String>` |
-| `delete_account` | `(id) -> Result<(), String>` |
-| `get_account_balance` | `(account_id) -> Result<i64, String>` |
+| Command               | Signature                                            |
+| --------------------- | ---------------------------------------------------- |
+| `list_accounts`       | `() -> Result<Vec<Account>, String>`                 |
+| `create_account`      | `(name, type, commodity) -> Result<Account, String>` |
+| `delete_account`      | `(id) -> Result<(), String>`                         |
+| `get_account_balance` | `(account_id) -> Result<i64, String>`                |
 
 #### `commands/transactions.rs`
 
-| Command | Signature |
-|---|---|
-| `list_transactions` | `(limit, offset) -> Result<Vec<TransactionWithPostings>, String>` |
-| `commit_transaction` | `(date, payee, notes, postings) -> Result<Transaction, String>` — Err if SUM != 0 |
-| `get_running_balances` | `(account_id) -> Result<Vec<BalanceEntry>, String>` |
-| `delete_transaction` | `(id) -> Result<(), String>` |
+| Command                | Signature                                                                         |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `list_transactions`    | `(limit, offset) -> Result<Vec<TransactionWithPostings>, String>`                 |
+| `commit_transaction`   | `(date, payee, notes, postings) -> Result<Transaction, String>` — Err if SUM != 0 |
+| `get_running_balances` | `(account_id) -> Result<Vec<BalanceEntry>, String>`                               |
+| `delete_transaction`   | `(id) -> Result<(), String>`                                                      |
 
 #### `commands/import.rs`
 
-| Command | Signature |
-|---|---|
-| `list_templates` | `() -> Result<Vec<TemplateMeta>, String>` |
-| `parse_statement` | `(file_path, template_name) -> Result<Vec<ParsedRow>, String>` — never panics; all row errors become `ParsedRow::Invalid` |
-| `commit_import_batch` | `(rows: Vec<ValidRow>) -> Result<BatchResult, String>` |
+| Command               | Signature                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `list_templates`      | `() -> Result<Vec<TemplateMeta>, String>`                                                                                 |
+| `parse_statement`     | `(file_path, template_name) -> Result<Vec<ParsedRow>, String>` — never panics; all row errors become `ParsedRow::Invalid` |
+| `commit_import_batch` | `(rows: Vec<ValidRow>) -> Result<BatchResult, String>`                                                                    |
 
 #### Auto-categorisation (`classifier.rs`)
 
@@ -340,11 +351,11 @@ Wide (> 1024px) — both panes open         Nav collapsed        Detail collapse
 
 **Pane responsibilities:**
 
-| Pane | Width (wide) | Content |
-|---|---|---|
-| **Left — Nav** | `~30%` | App name, tagline, nav links, account tree with live balances; collapse toggle `[>]` on its right edge |
-| **Center — List** | `~40%` (expands to fill collapsed pane space) | Primary content: transaction list, import triage grid, account ledger |
-| **Right — Detail** | `~30%` | Context panel: selected transaction postings, account summary card, quick-add form; collapse toggle `[<]` on its left edge |
+| Pane               | Width (wide)                                  | Content                                                                                                                    |
+| ------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Left — Nav**     | `~30%`                                        | App name, tagline, nav links, account tree with live balances; collapse toggle `[>]` on its right edge                     |
+| **Center — List**  | `~40%` (expands to fill collapsed pane space) | Primary content: transaction list, import triage grid, account ledger                                                      |
+| **Right — Detail** | `~30%`                                        | Context panel: selected transaction postings, account summary card, quick-add form; collapse toggle `[<]` on its left edge |
 
 **Pane collapse rules:**
 
@@ -371,12 +382,12 @@ Three modes: **System** (default) / **Light** / **Dark**.
 ```html
 <!-- app.html — inline script to set data-theme before paint -->
 <script>
-  const t = localStorage.getItem('theme') ?? 'system';
-  if (t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  } else {
-    document.documentElement.setAttribute('data-theme', 'light');
-  }
+ const t = localStorage.getItem("theme") ?? "system";
+ if (t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches)) {
+  document.documentElement.setAttribute("data-theme", "dark");
+ } else {
+  document.documentElement.setAttribute("data-theme", "light");
+ }
 </script>
 ```
 
@@ -386,36 +397,36 @@ Three modes: **System** (default) / **Light** / **Dark**.
 /* Dark palette (default; also applied by [data-theme="dark"]) */
 :root,
 [data-theme="dark"] {
-  --color-bg:        hsl(220, 13%,  9%);
-  --color-surface:   hsl(220, 13%, 13%);
-  --color-border:    hsl(220, 13%, 20%);
-  --color-text:      hsl(220, 14%, 90%);
-  --color-muted:     hsl(220, 10%, 55%);
-  --color-accent:    hsl(252, 80%, 68%);
-  --color-positive:  hsl(150, 65%, 48%);
-  --color-negative:  hsl(  0, 72%, 58%);
-  --color-warning:   hsl( 38, 92%, 58%);
+ --color-bg: hsl(220, 13%, 9%);
+ --color-surface: hsl(220, 13%, 13%);
+ --color-border: hsl(220, 13%, 20%);
+ --color-text: hsl(220, 14%, 90%);
+ --color-muted: hsl(220, 10%, 55%);
+ --color-accent: hsl(252, 80%, 68%);
+ --color-positive: hsl(150, 65%, 48%);
+ --color-negative: hsl(0, 72%, 58%);
+ --color-warning: hsl(38, 92%, 58%);
 }
 
 /* Light palette */
 [data-theme="light"] {
-  --color-bg:        hsl(220, 20%, 97%);
-  --color-surface:   hsl(220, 20%, 100%);
-  --color-border:    hsl(220, 13%, 82%);
-  --color-text:      hsl(220, 14%, 12%);
-  --color-muted:     hsl(220, 10%, 48%);
-  --color-accent:    hsl(252, 70%, 55%);
-  --color-positive:  hsl(150, 55%, 36%);
-  --color-negative:  hsl(  0, 65%, 46%);
-  --color-warning:   hsl( 38, 85%, 42%);
+ --color-bg: hsl(220, 20%, 97%);
+ --color-surface: hsl(220, 20%, 100%);
+ --color-border: hsl(220, 13%, 82%);
+ --color-text: hsl(220, 14%, 12%);
+ --color-muted: hsl(220, 10%, 48%);
+ --color-accent: hsl(252, 70%, 55%);
+ --color-positive: hsl(150, 55%, 36%);
+ --color-negative: hsl(0, 65%, 46%);
+ --color-warning: hsl(38, 85%, 42%);
 }
 
 /* 3-pane grid — fluid fractions, no px */
 :root {
-  --col-nav:         3fr;    /* ~30% */
-  --col-list:        4fr;    /* ~40% */
-  --col-detail:      3fr;    /* ~30% */
-  --col-collapsed:   2.5rem; /* icon-strip width when pane is collapsed */
+ --col-nav: 3fr; /* ~30% */
+ --col-list: 4fr; /* ~40% */
+ --col-detail: 3fr; /* ~30% */
+ --col-collapsed: 2.5rem; /* icon-strip width when pane is collapsed */
 }
 ```
 
@@ -426,12 +437,12 @@ Three modes: **System** (default) / **Light** / **Dark**.
 - CSS Grid with named areas: `"nav list detail"` — column widths derived from
   collapse state via `$derived` rune:
 
-  ```
-  navCollapsed=false, detailCollapsed=false  →  3fr 4fr 3fr
-  navCollapsed=true,  detailCollapsed=false  →  2.5rem 4fr 3fr
-  navCollapsed=false, detailCollapsed=true   →  3fr 4fr 2.5rem
-  navCollapsed=true,  detailCollapsed=true   →  2.5rem 1fr 2.5rem
-  ```
+    ```
+    navCollapsed=false, detailCollapsed=false  →  3fr 4fr 3fr
+    navCollapsed=true,  detailCollapsed=false  →  2.5rem 4fr 3fr
+    navCollapsed=false, detailCollapsed=true   →  3fr 4fr 2.5rem
+    navCollapsed=true,  detailCollapsed=true   →  2.5rem 1fr 2.5rem
+    ```
 
 - **Wide (> 1024px):** grid with computed columns; both toggles visible
 - **Medium (640–1024px):** nav + list only; detail as overlay on selection
@@ -547,13 +558,13 @@ File bytes
 
 Pre-bundled TOML templates shipped with the binary via `tauri::path::resource_dir`:
 
-| File | Covers |
-|---|---|
-| `templates/form_26as_tds.toml` | Form 26AS TDS (see blueprint §4.1) |
-| `templates/hdfc_savings.toml` | HDFC Bank savings CSV |
-| `templates/axis_bank.toml` | Axis Bank statement CSV |
-| `templates/sbi_statement.toml` | SBI bank statement CSV |
-| `templates/generic_csv.toml` | Fallback: auto-detect date/amount columns |
+| File                           | Covers                                    |
+| ------------------------------ | ----------------------------------------- |
+| `templates/form_26as_tds.toml` | Form 26AS TDS (see blueprint §4.1)        |
+| `templates/hdfc_savings.toml`  | HDFC Bank savings CSV                     |
+| `templates/axis_bank.toml`     | Axis Bank statement CSV                   |
+| `templates/sbi_statement.toml` | SBI bank statement CSV                    |
+| `templates/generic_csv.toml`   | Fallback: auto-detect date/amount columns |
 
 ---
 
@@ -589,15 +600,15 @@ A CI run must pass all layers before merge.
 Every module has `#[cfg(test)]` tests. Tests use `tempfile::NamedTempFile`
 for isolated in-memory or on-disk DBs so they never share state.
 
-| Module | What is tested |
-|---|---|
-| `template/` | TOML parse -> struct; regex extraction; multi-leg postings |
-| `parser/excel.rs` | Valid row -> `ParsedRow::Valid`; corrupt cell -> `ParsedRow::Invalid`; never panics |
-| `parser/csv_parser.rs` | BOM, varying delimiters, empty rows, malformed UTF-8 |
-| `classifier.rs` | 0 / 1 / N training samples; prediction stability; vocabulary cap |
-| `commands/transactions.rs` | SUM != 0 -> `Err`; SUM = 0 -> `Ok`; atomicity on partial failure |
-| `commands/security.rs` | `is_onboarding_done()` returns false when key absent; true only after `setup_master_password()` completes |
-| `db.rs` | Migration idempotency (run twice, no error); WAL mode confirmed |
+| Module                     | What is tested                                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `template/`                | TOML parse -> struct; regex extraction; multi-leg postings                                                |
+| `parser/excel.rs`          | Valid row -> `ParsedRow::Valid`; corrupt cell -> `ParsedRow::Invalid`; never panics                       |
+| `parser/csv_parser.rs`     | BOM, varying delimiters, empty rows, malformed UTF-8                                                      |
+| `classifier.rs`            | 0 / 1 / N training samples; prediction stability; vocabulary cap                                          |
+| `commands/transactions.rs` | SUM != 0 -> `Err`; SUM = 0 -> `Ok`; atomicity on partial failure                                          |
+| `commands/security.rs`     | `is_onboarding_done()` returns false when key absent; true only after `setup_master_password()` completes |
+| `db.rs`                    | Migration idempotency (run twice, no error); WAL mode confirmed                                           |
 
 ```bash
 cd src-tauri && cargo test
@@ -615,12 +626,12 @@ cd src-tauri && cargo test
 All four fuzz targets exercise the zero-trust parsing surfaces.
 Fuzz targets are pure functions — they do not touch the DB.
 
-| Target | Input | Risk to guard against |
-|---|---|---|
-| `fuzz_parse_excel` | Arbitrary bytes as .xlsx | Panic / OOM in calamine |
-| `fuzz_parse_csv` | Arbitrary bytes as .csv | Malformed UTF-8, delimiter confusion |
-| `fuzz_apply_template` | Random TOML + row data | Regex catastrophic backtracking |
-| `fuzz_commit_transaction` | Random `Vec<PostingInput>` | Balance invariant bypass |
+| Target                    | Input                      | Risk to guard against                |
+| ------------------------- | -------------------------- | ------------------------------------ |
+| `fuzz_parse_excel`        | Arbitrary bytes as .xlsx   | Panic / OOM in calamine              |
+| `fuzz_parse_csv`          | Arbitrary bytes as .csv    | Malformed UTF-8, delimiter confusion |
+| `fuzz_apply_template`     | Random TOML + row data     | Regex catastrophic backtracking      |
+| `fuzz_commit_transaction` | Random `Vec<PostingInput>` | Balance invariant bypass             |
 
 Setup:
 
@@ -650,16 +661,16 @@ Corpus: place at least one valid sample file per target in
 pnpm add -D vitest @testing-library/svelte @vitest/coverage-v8
 ```
 
-| Test | Asserts |
-|---|---|
-| Triage grid: `ParsedRow::Valid` row | Green class applied; no error text rendered |
-| Triage grid: `ParsedRow::Invalid` row | Red class applied; `error_reason` text present |
-| Manual entry form | Submit button disabled when `$derived` SUM != 0 |
-| Manual entry form | Submit button enabled when SUM = 0 |
-| Balance card | Correct INR formatting (paise to rupees, locale-aware) |
-| Onboarding: step 2 | Next button disabled until passwords match |
-| Onboarding: step 4 | Calls `setup_master_password` IPC on Finish (mocked) |
-| Layout guard | Redirects to `/onboarding` when `is_onboarding_done()` mock returns false |
+| Test                                  | Asserts                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------- |
+| Triage grid: `ParsedRow::Valid` row   | Green class applied; no error text rendered                               |
+| Triage grid: `ParsedRow::Invalid` row | Red class applied; `error_reason` text present                            |
+| Manual entry form                     | Submit button disabled when `$derived` SUM != 0                           |
+| Manual entry form                     | Submit button enabled when SUM = 0                                        |
+| Balance card                          | Correct INR formatting (paise to rupees, locale-aware)                    |
+| Onboarding: step 2                    | Next button disabled until passwords match                                |
+| Onboarding: step 4                    | Calls `setup_master_password` IPC on Finish (mocked)                      |
+| Layout guard                          | Redirects to `/onboarding` when `is_onboarding_done()` mock returns false |
 
 All IPC calls are mocked via `@tauri-apps/api/mocks`.
 
@@ -724,22 +735,22 @@ e2e/
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./e2e",
-  fullyParallel: false,        // Tauri app is a single process; tests are sequential
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  workers: 1,
-  reporter: [["list"], ["html", { open: "never" }]],
-  use: {
-    trace: "on-first-retry",
-  },
-  // tauri-driver launches the built app and exposes a WebDriver endpoint
-  webServer: {
-    command: "cargo tauri build --debug && tauri-driver",
-    port: 4444,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+ testDir: "./e2e",
+ fullyParallel: false, // Tauri app is a single process; tests are sequential
+ forbidOnly: !!process.env.CI,
+ retries: process.env.CI ? 1 : 0,
+ workers: 1,
+ reporter: [["list"], ["html", { open: "never" }]],
+ use: {
+  trace: "on-first-retry",
+ },
+ // tauri-driver launches the built app and exposes a WebDriver endpoint
+ webServer: {
+  command: "cargo tauri build --debug && tauri-driver",
+  port: 4444,
+  reuseExistingServer: !process.env.CI,
+  timeout: 120_000,
+ },
 });
 ```
 
@@ -751,11 +762,11 @@ import { spawn, type ChildProcess } from "child_process";
 
 // Extend with app process handle for clean teardown
 export const test = base.extend<{ appProcess: ChildProcess }>({
-  appProcess: async ({}, use) => {
-    const proc = spawn("tauri-driver", [], { stdio: "pipe" });
-    await use(proc);
-    proc.kill();
-  },
+ appProcess: async ({}, use) => {
+  const proc = spawn("tauri-driver", [], { stdio: "pipe" });
+  await use(proc);
+  proc.kill();
+ },
 });
 
 export const expect = base.expect;
@@ -947,85 +958,85 @@ test-e2e  ───────────────────────�
 # .github/workflows/ci.yml (outline)
 name: CI
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+    pull_request:
+        branches: [main]
+    push:
+        branches: [main]
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-        with: { version: 10 }
-      - uses: actions/setup-node@v6
-        with: { node-version: 24, cache: pnpm }
-      - run: pnpm install
-      - run: pnpm lint
-      - run: pnpm format:check
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v5
+              with: { version: 10 }
+            - uses: actions/setup-node@v6
+              with: { node-version: 24, cache: pnpm }
+            - run: pnpm install
+            - run: pnpm lint
+            - run: pnpm format:check
 
-  rust-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with: { components: clippy, rustfmt }
-      - uses: Swatinem/rust-cache@v2
-        with: { workspaces: src-tauri }
-      - run: cargo fmt --all -- --check
-        working-directory: src-tauri
-      - run: cargo clippy --all-targets -- -D warnings
-        working-directory: src-tauri
+    rust-check:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@stable
+              with: { components: clippy, rustfmt }
+            - uses: Swatinem/rust-cache@v2
+              with: { workspaces: src-tauri }
+            - run: cargo fmt --all -- --check
+              working-directory: src-tauri
+            - run: cargo clippy --all-targets -- -D warnings
+              working-directory: src-tauri
 
-  test-unit:
-    runs-on: ubuntu-latest
-    needs: [lint, rust-check]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with: { workspaces: src-tauri }
-      - uses: pnpm/action-setup@v5
-        with: { version: 10 }
-      - uses: actions/setup-node@v6
-        with: { node-version: 24, cache: pnpm }
-      - run: cargo test
-        working-directory: src-tauri
-      - run: pnpm install && pnpm test
+    test-unit:
+        runs-on: ubuntu-latest
+        needs: [lint, rust-check]
+        steps:
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+              with: { workspaces: src-tauri }
+            - uses: pnpm/action-setup@v5
+              with: { version: 10 }
+            - uses: actions/setup-node@v6
+              with: { node-version: 24, cache: pnpm }
+            - run: cargo test
+              working-directory: src-tauri
+            - run: pnpm install && pnpm test
 
-  test-e2e:
-    runs-on: ubuntu-latest
-    needs: [test-unit]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with: { workspaces: src-tauri }
-      - uses: pnpm/action-setup@v5
-        with: { version: 10 }
-      - uses: actions/setup-node@v6
-        with: { node-version: 24, cache: pnpm }
-      - run: pnpm install
-      - name: Install system deps (WebKit, Tauri)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
-            librsvg2-dev patchelf xvfb
-      - name: Install tauri-driver
-        run: cargo install tauri-driver
-      - name: Install Playwright
-        run: npx playwright install chromium --with-deps
-      - name: Build debug binary
-        run: pnpm test:e2e:prepare
-      - name: Run E2E tests
-        run: xvfb-run pnpm test:e2e:run
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 1
+    test-e2e:
+        runs-on: ubuntu-latest
+        needs: [test-unit]
+        steps:
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+              with: { workspaces: src-tauri }
+            - uses: pnpm/action-setup@v5
+              with: { version: 10 }
+            - uses: actions/setup-node@v6
+              with: { node-version: 24, cache: pnpm }
+            - run: pnpm install
+            - name: Install system deps (WebKit, Tauri)
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+                    librsvg2-dev patchelf xvfb
+            - name: Install tauri-driver
+              run: cargo install tauri-driver
+            - name: Install Playwright
+              run: npx playwright install chromium --with-deps
+            - name: Build debug binary
+              run: pnpm test:e2e:prepare
+            - name: Run E2E tests
+              run: xvfb-run pnpm test:e2e:run
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: playwright-report
+                  path: playwright-report/
+                  retention-days: 1
 ```
 
 > **Note — fuzz tests in CI:** `cargo-fuzz` requires nightly and only runs on
@@ -1077,74 +1088,74 @@ Direct port of `job-autofill/static.yml`:
 ```yaml
 name: Generate docs and deploy to Pages
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+    push:
+        branches: [main]
+    workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+    contents: read
+    pages: write
+    id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+    group: pages
+    cancel-in-progress: false
 
 jobs:
-  generate-and-deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-        with: { version: 10 }
-      - uses: actions/setup-node@v6
-        with: { node-version: 24, cache: pnpm }
-      - run: pnpm install
-      - name: Install Graphviz
-        run: sudo apt-get install -y graphviz
-      - name: Build documentation
-        run: pnpm docs:all
-      - uses: actions/upload-pages-artifact@v3
-        with: { path: docs/html }
-      - uses: actions/deploy-pages@v4
-        id: deployment
+    generate-and-deploy:
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v5
+              with: { version: 10 }
+            - uses: actions/setup-node@v6
+              with: { node-version: 24, cache: pnpm }
+            - run: pnpm install
+            - name: Install Graphviz
+              run: sudo apt-get install -y graphviz
+            - name: Build documentation
+              run: pnpm docs:all
+            - uses: actions/upload-pages-artifact@v3
+              with: { path: docs/html }
+            - uses: actions/deploy-pages@v4
+              id: deployment
 ```
 
 ---
 
 ## Implementation Order
 
-| # | Phase | Deliverable | Effort |
-|---|---|---|---|
-| 0 | Tooling bootstrap | Prettier, ESLint, EditorConfig, Husky, `.gitattributes`, TypeDoc, dependency-cruiser, CI workflows | Low |
-| 1 | Dependencies & DB | Encrypted DB opens on launch | Medium |
-| 2 | Rust IPC commands | All backend commands wired + unit tests | High |
-| 3 | Design system & layout | Nav shell, tokens, dark mode | Medium |
-| 4 | Onboarding | `is_onboarding_done()` guard + multi-step wizard | Low |
-| 5 | Core pages | Accounts, Transactions, Dashboard | High |
-| 6 | Import / Triage Grid | Full parse -> review -> commit pipeline | High |
-| 7 | Analytics charts | SveltePlot visualisations | Medium |
-| 8 | Import templates | 5 pre-bundled TOML templates | Low |
-| 9 | Security hardening | CSP, capabilities, WAL | Medium |
-| 10 | Fuzz tests | 4 targets with corpus seeds | Medium |
-| 11 | Component tests | Vitest + @testing-library/svelte | Medium |
-| 12 | E2E tests | Playwright + tauri-driver; all spec files | High |
+| #   | Phase                  | Deliverable                                                                                        | Effort |
+| --- | ---------------------- | -------------------------------------------------------------------------------------------------- | ------ |
+| 0   | Tooling bootstrap      | Prettier, ESLint, EditorConfig, Husky, `.gitattributes`, TypeDoc, dependency-cruiser, CI workflows | Low    |
+| 1   | Dependencies & DB      | Encrypted DB opens on launch                                                                       | Medium |
+| 2   | Rust IPC commands      | All backend commands wired + unit tests                                                            | High   |
+| 3   | Design system & layout | Nav shell, tokens, dark mode                                                                       | Medium |
+| 4   | Onboarding             | `is_onboarding_done()` guard + multi-step wizard                                                   | Low    |
+| 5   | Core pages             | Accounts, Transactions, Dashboard                                                                  | High   |
+| 6   | Import / Triage Grid   | Full parse -> review -> commit pipeline                                                            | High   |
+| 7   | Analytics charts       | SveltePlot visualisations                                                                          | Medium |
+| 8   | Import templates       | 5 pre-bundled TOML templates                                                                       | Low    |
+| 9   | Security hardening     | CSP, capabilities, WAL                                                                             | Medium |
+| 10  | Fuzz tests             | 4 targets with corpus seeds                                                                        | Medium |
+| 11  | Component tests        | Vitest + @testing-library/svelte                                                                   | Medium |
+| 12  | E2E tests              | Playwright + tauri-driver; all spec files                                                          | High   |
 
 ---
 
 ## Rejected Alternatives
 
-| Technology | Reason |
-|---|---|
-| Tailwind CSS | Use plain CSS + fluid units + oat.ink |
-| npm / yarn / bun | Only pnpm permitted |
-| TigerBeetle / hledger | Dual-DB sync causes race conditions |
-| Account Aggregator APIs | Cloud dependency; binary bloat |
-| Column-level encryption | Metadata leakage; full-DB encryption mandated |
-| `sqlx` with sqlite feature | Cannot do full-page encryption without custom build |
-| FrankenSQLite | Requires nightly Rust; experimental |
-| `is_first_run()` | Unidirectional flag; cannot detect mid-onboarding abort |
-| WebdriverIO for E2E | Official Tauri recommendation, but Playwright API is preferred per project conventions; tauri-driver exposes WebDriver so Playwright can drive it |
+| Technology                 | Reason                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tailwind CSS               | Use plain CSS + fluid units + oat.ink                                                                                                             |
+| npm / yarn / bun           | Only pnpm permitted                                                                                                                               |
+| TigerBeetle / hledger      | Dual-DB sync causes race conditions                                                                                                               |
+| Account Aggregator APIs    | Cloud dependency; binary bloat                                                                                                                    |
+| Column-level encryption    | Metadata leakage; full-DB encryption mandated                                                                                                     |
+| `sqlx` with sqlite feature | Cannot do full-page encryption without custom build                                                                                               |
+| FrankenSQLite              | Requires nightly Rust; experimental                                                                                                               |
+| `is_first_run()`           | Unidirectional flag; cannot detect mid-onboarding abort                                                                                           |
+| WebdriverIO for E2E        | Official Tauri recommendation, but Playwright API is preferred per project conventions; tauri-driver exposes WebDriver so Playwright can drive it |

@@ -18,24 +18,28 @@ simultaneously need:
 Two layout archetypes were considered:
 
 **Two-pane (sidebar + content):**
+
 ```
 ┌────────┬──────────────────────────┐
 │  Nav   │      Main content        │
 │ (14%)  │        (86%)             │
 └────────┴──────────────────────────┘
 ```
+
 This collapses detail into the main column. Selecting a transaction opens a
 modal or an inline expander, which hides part of the list. On a wide desktop
 screen, ~70% of horizontal space goes unused or is filled with excessive
 whitespace.
 
 **Three-pane (nav + list + detail):**
+
 ```
 ┌──────┬──────────┬──────┐
 │ Nav  │   List   │Detail│
 │  30% │    40%   │  30% │
 └──────┴──────────┴──────┘
 ```
+
 All three information types are visible simultaneously on wide screens. This
 matches the interaction model of desktop-native finance apps (GnuCash, Ledger
 Live, Banktivity) and email clients (Outlook, Thunderbird) where list +
@@ -50,10 +54,10 @@ widths anywhere.
 ```css
 /* Wide: all 3 panes */
 .shell {
-  display: grid;
-  grid-template-columns: var(--col-nav) var(--col-list) var(--col-detail);
-  grid-template-areas: "nav list detail";
-  height: 100vh;
+	display: grid;
+	grid-template-columns: var(--col-nav) var(--col-list) var(--col-detail);
+	grid-template-areas: "nav list detail";
+	height: 100vh;
 }
 ```
 
@@ -62,23 +66,24 @@ widths anywhere.
 The layout collapses progressively via CSS media queries and a Svelte
 `$derived` `layoutMode` rune — no JavaScript resize observers needed.
 
-| Viewport | Columns | Detail pane |
-|---|---|---|
-| Wide `> 1024px` | nav (3fr) + list (4fr) + detail (3fr) | Always visible |
-| Medium `640–1024px` | nav (30%) + list (70%) | Hidden by default; slides in as an overlay on item selection (CSS transform + opacity) |
-| Narrow `< 640px` | Single column (100vw) | Becomes a pushed view via SvelteKit page transition; bottom tab bar replaces nav pane |
+| Viewport            | Columns                               | Detail pane                                                                            |
+| ------------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
+| Wide `> 1024px`     | nav (3fr) + list (4fr) + detail (3fr) | Always visible                                                                         |
+| Medium `640–1024px` | nav (30%) + list (70%)                | Hidden by default; slides in as an overlay on item selection (CSS transform + opacity) |
+| Narrow `< 640px`    | Single column (100vw)                 | Becomes a pushed view via SvelteKit page transition; bottom tab bar replaces nav pane  |
 
 ### Pane responsibilities
 
-| Pane | Content |
-|---|---|
-| **Nav (left)** | App name + tagline header; nav links with active route indicator; account tree with live balance per account |
-| **List (center)** | Transaction ledger / import triage / account rows — the primary scrollable list for the current route |
+| Pane               | Content                                                                                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nav (left)**     | App name + tagline header; nav links with active route indicator; account tree with live balance per account                                                          |
+| **List (center)**  | Transaction ledger / import triage / account rows — the primary scrollable list for the current route                                                                 |
 | **Detail (right)** | Context panel driven by center selection: transaction postings, account summary card, quick-add transaction form; shows a neutral hint state when nothing is selected |
 
 ### Empty state of the detail pane
 
 The detail pane is **never blank**. When nothing is selected:
+
 - On the Transactions route: shows the account's running balance chart
 - On the Import route: shows template documentation for the selected template
 - On the Accounts route: shows net-worth summary

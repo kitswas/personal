@@ -11,16 +11,16 @@ is required.
 
 Options considered:
 
-| Strategy | Concurrency | Complexity | Risk |
-|---|---|---|---|
-| `r2d2` / `deadpool` connection pool | Multiple concurrent readers | Medium | Pool exhaustion; WAL reader limits |
-| `sqlx` async pool (not usable — see ADR 0001) | High concurrency | Low API surface | Incompatible with SQLCipher |
-| Single `Arc<Mutex<Connection>>` + `spawn_blocking` | Serialised | Low | None |
+| Strategy                                           | Concurrency                 | Complexity      | Risk                               |
+| -------------------------------------------------- | --------------------------- | --------------- | ---------------------------------- |
+| `r2d2` / `deadpool` connection pool                | Multiple concurrent readers | Medium          | Pool exhaustion; WAL reader limits |
+| `sqlx` async pool (not usable — see ADR 0001)      | High concurrency            | Low API surface | Incompatible with SQLCipher        |
+| Single `Arc<Mutex<Connection>>` + `spawn_blocking` | Serialised                  | Low             | None                               |
 
 **Why a pool is unnecessary here:**
 
-SQLite in WAL mode supports multiple concurrent *readers* but only one
-concurrent *writer*. For a single-user desktop application, all meaningful
+SQLite in WAL mode supports multiple concurrent _readers_ but only one
+concurrent _writer_. For a single-user desktop application, all meaningful
 operations involve writes (inserting transactions, updating settings). A
 connection pool would provide no real throughput benefit — writes would still
 serialise at the SQLite level.

@@ -15,12 +15,12 @@ to double-entry postings. Templates must express:
 
 Formats considered:
 
-| Format | Regex ergonomics | Comments | Arrays of tables | Verdict |
-|---|---|---|---|---|
-| JSON | Poor — `\\d+` must be `\\\\d+` | Not supported | Verbose | Rejected |
-| YAML | Poor — special chars need quoting | Supported | Supported | Rejected |
-| TOML | **Excellent** — `'\\d+'` is a literal string | Supported | `[[table]]` syntax | **Chosen** |
-| Lua / WASM scripts | Full programmability | — | — | Rejected — arbitrary code execution risk |
+| Format             | Regex ergonomics                             | Comments      | Arrays of tables   | Verdict                                  |
+| ------------------ | -------------------------------------------- | ------------- | ------------------ | ---------------------------------------- |
+| JSON               | Poor — `\\d+` must be `\\\\d+`               | Not supported | Verbose            | Rejected                                 |
+| YAML               | Poor — special chars need quoting            | Supported     | Supported          | Rejected                                 |
+| TOML               | **Excellent** — `'\\d+'` is a literal string | Supported     | `[[table]]` syntax | **Chosen**                               |
+| Lua / WASM scripts | Full programmability                         | —             | —                  | Rejected — arbitrary code execution risk |
 
 The decisive factor is TOML's **literal string** syntax (single quotes).
 A regex like `UPI/(?:DR|CR)/\d+/([^/]+)` requires no escaping in TOML:

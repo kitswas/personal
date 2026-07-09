@@ -1,2 +1,10 @@
+packages:
+    - "."
 allowBuilds:
-  esbuild: false
+    esbuild: false
+trustPolicy: "no-downgrade"
+sharedWorkspaceLockfile: true
+overrides:
+    # chokidar@4.0.3 fails the no-downgrade trust policy (no provenance).
+    # 5.0.0 is the stable latest (published Dec 2024, 7 months old).
+    chokidar: "^5.0.0"

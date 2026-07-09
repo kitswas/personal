@@ -18,11 +18,11 @@ standard expectation in 2026 desktop software.
 
 ### Where to store the preference
 
-| Storage | Accessible before DB unlock? | Sensitive? | Verdict |
-|---|---|---|---|
-| Encrypted DB `settings` table | No — requires `unlock()` | No | Rejected |
-| `localStorage` | Yes | No | **Chosen** |
-| OS-level config file (Tauri `AppConfig`) | Yes | No | Overkill for a UI preference |
+| Storage                                  | Accessible before DB unlock? | Sensitive? | Verdict                      |
+| ---------------------------------------- | ---------------------------- | ---------- | ---------------------------- |
+| Encrypted DB `settings` table            | No — requires `unlock()`     | No         | Rejected                     |
+| `localStorage`                           | Yes                          | No         | **Chosen**                   |
+| OS-level config file (Tauri `AppConfig`) | Yes                          | No         | Overkill for a UI preference |
 
 The theme must apply on the **first paint** — before the Svelte bundle
 executes — to prevent a flash of wrong colour. This requires a small inline
@@ -43,12 +43,12 @@ An inline blocking script in `src/app.html` runs before any CSS or JS:
 
 ```html
 <script>
-  (function () {
-    const t = localStorage.getItem("theme") ?? "system";
-    const prefersDark = matchMedia("(prefers-color-scheme: dark)").matches;
-    const isDark = t === "dark" || (t === "system" && prefersDark);
-    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
-  })();
+	(function () {
+		const t = localStorage.getItem("theme") ?? "system";
+		const prefersDark = matchMedia("(prefers-color-scheme: dark)").matches;
+		const isDark = t === "dark" || (t === "system" && prefersDark);
+		document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+	})();
 </script>
 ```
 
@@ -63,10 +63,14 @@ This separates theme intent from component state.
 ```css
 /* Dark palette — also the default when data-theme is absent */
 :root,
-[data-theme="dark"] { /* ... dark tokens ... */ }
+[data-theme="dark"] {
+	/* ... dark tokens ... */
+}
 
 /* Light palette */
-[data-theme="light"] { /* ... light tokens ... */ }
+[data-theme="light"] {
+	/* ... light tokens ... */
+}
 ```
 
 System mode does **not** use `@media (prefers-color-scheme)` in CSS. Instead,
@@ -85,24 +89,25 @@ type Theme = "system" | "light" | "dark";
 const STORAGE_KEY = "theme";
 
 const resolveActual = (t: Theme): "light" | "dark" =>
-  t === "system"
-    ? matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-    : t;
+	t === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
 
 const apply = (t: Theme): void => {
-  document.documentElement.setAttribute("data-theme", resolveActual(t));
-  localStorage.setItem(STORAGE_KEY, t);
+	document.documentElement.setAttribute("data-theme", resolveActual(t));
+	localStorage.setItem(STORAGE_KEY, t);
 };
 
 export const theme = (() => {
-  let value = $state<Theme>(
-    (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "system"
-  );
+	let value = $state<Theme>((localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "system");
 
-  return {
-    get current() { return value; },
-    set: (t: Theme) => { value = t; apply(t); },
-  };
+	return {
+		get current() {
+			return value;
+		},
+		set: (t: Theme) => {
+			value = t;
+			apply(t);
+		},
+	};
 })();
 ```
 

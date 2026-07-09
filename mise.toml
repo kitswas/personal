@@ -2,7 +2,3 @@
 node = "lts"
 pnpm = "latest"
 rust = "stable"
-# Perl is not available via mise on Windows.
-# Install Strawberry Perl manually if building bundled OpenSSL is required.
-# Currently not needed: rusqlite uses `bundled-sqlcipher` which links system
-# crypto (Windows CNG) and does not invoke perl.

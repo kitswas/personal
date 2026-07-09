@@ -58,7 +58,7 @@ For every asynchronous operation, the UI must explicitly and accurately reflect 
 - **Atomic Commits:** Every commit must be a single, self-contained logical unit (one feature, one bug fix, or one refactor).
 - **Independently Revertible:** Every single commit in the history must be independently revertible without breaking the application state or the CI pipeline.
 - **Complete Context:** A code change commit must simultaneously include all relevant **test updates** and **documentation updates**. Do not defer tests or docs to follow-up commits.
-- **Test Per Commit:** Run the full relevant test suite for *every* commit. The commit history must remain entirely green and compilable at every step.
+- **Test Per Commit:** Run the full relevant test suite for _every_ commit. The commit history must remain entirely green and compilable at every step.
 
 ## 10. Tooling and Environment Baseline
 
