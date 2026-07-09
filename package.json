@@ -22,8 +22,7 @@
 		"test:e2e:report": "playwright show-report",
 		"test:e2e": "pnpm test:e2e:prepare && pnpm test:e2e:run",
 		"docs:graph": "depcruise src --include-only \"src/\" --output-type dot > docs/dependency-graph.dot && dot -Tsvg docs/dependency-graph.dot -o docs/dependency-graph.svg",
-		"docs:typedoc": "typedoc --options typedoc.json",
-		"docs:all": "pnpm docs:graph && pnpm docs:typedoc",
+		"docs:all": "pnpm docs:graph",
 		"prepare": "husky"
 	},
 	"license": "MIT",
@@ -45,8 +44,6 @@
 		"husky": "^9.1.7",
 		"svelte": "^5.56.4",
 		"svelte-check": "^4.7.2",
-		"typedoc": "^0.28.20",
-		"typedoc-plugin-mermaid": "^1.12.0",
 		"typescript": "~7.0.2",
 		"vite": "^8.1.3",
 		"vitest": "^4.1.10"
