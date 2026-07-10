@@ -29,11 +29,11 @@ pub const KEYRING_USER: &str = "master_key";
 /// Returns [`AppError::WrongPassword`] if the key is invalid.
 /// Returns [`AppError::Db`] for any other SQLite error.
 pub fn open(db_path: &Path, key: &str) -> Result<Connection, AppError> {
-	let conn = Connection::open(db_path).map_err(AppError::Db)?;
+	let conn = Connection::open(db_path).map_err(AppError::from)?;
 
 	// Apply encryption key — must be the very first pragma sent.
 	let key_pragma = format!("PRAGMA key = '{}';", key.replace('\'', "''"));
-	conn.execute_batch(&key_pragma).map_err(AppError::Db)?;
+	conn.execute_batch(&key_pragma).map_err(AppError::from)?;
 
 	// Validate the key by running a trivial query.
 	// If the key is wrong, SQLCipher returns SQLITE_NOTADB here.
@@ -44,16 +44,16 @@ pub fn open(db_path: &Path, key: &str) -> Result<Connection, AppError> {
 			{
 				AppError::WrongPassword
 			},
-			other => AppError::Db(other),
+			other => AppError::from(other),
 		})?;
 
 	// WAL mode: writes do not block readers; crash-safe.
 	conn.execute_batch("PRAGMA journal_mode = WAL;")
-		.map_err(AppError::Db)?;
+		.map_err(AppError::from)?;
 
 	// Foreign key enforcement.
 	conn.execute_batch("PRAGMA foreign_keys = ON;")
-		.map_err(AppError::Db)?;
+		.map_err(AppError::from)?;
 
 	Ok(conn)
 }
@@ -68,7 +68,7 @@ pub fn open(db_path: &Path, key: &str) -> Result<Connection, AppError> {
 /// This function is safe to call on every application start.
 pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
 	conn.execute_batch(include_str!("../migrations/0001_initial.sql"))
-		.map_err(AppError::Db)
+		.map_err(AppError::from)
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +92,7 @@ pub fn is_onboarding_done(conn: &Connection) -> Result<bool, AppError> {
 	match result {
 		Ok(v) => Ok(v == "true"),
 		Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
-		Err(e) => Err(AppError::Db(e)),
+		Err(e) => Err(AppError::from(e)),
 	}
 }
 

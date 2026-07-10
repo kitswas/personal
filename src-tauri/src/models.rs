@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 // ---------------------------------------------------------------------------
 
 /// A ledger account.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
 	pub id: String,
@@ -18,7 +19,8 @@ pub struct Account {
 
 /// A single posting (one leg of a double-entry transaction).
 /// `amount` is in the smallest currency unit (paise for INR, cents for USD).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct Posting {
 	pub id: String,
@@ -31,7 +33,8 @@ pub struct Posting {
 }
 
 /// A transaction header (without postings).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
 	pub id: String,
@@ -42,7 +45,8 @@ pub struct Transaction {
 }
 
 /// A transaction together with its postings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionWithPostings {
 	pub transaction: Transaction,
@@ -50,7 +54,8 @@ pub struct TransactionWithPostings {
 }
 
 /// Input type for creating a new posting (no id yet — generated server-side).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct PostingInput {
 	pub account_id: String,
@@ -59,7 +64,8 @@ pub struct PostingInput {
 }
 
 /// A single entry in an account's running balance history.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceEntry {
 	/// ISO 8601 date string.
@@ -75,7 +81,8 @@ pub struct BalanceEntry {
 /// The result of parsing a single row from an imported statement.
 ///
 /// All matches on this enum must be exhaustive — the compiler enforces this.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum ParsedRow {
 	/// Row was parsed successfully and passes validation.
@@ -103,7 +110,8 @@ pub enum ParsedRow {
 }
 
 /// A row that has been reviewed and confirmed as valid, ready for commit.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct ValidRow {
 	pub date: String,
@@ -116,7 +124,8 @@ pub struct ValidRow {
 }
 
 /// Result of committing an import batch.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct BatchResult {
 	pub committed: usize,
@@ -128,7 +137,8 @@ pub struct BatchResult {
 // ---------------------------------------------------------------------------
 
 /// Minimal metadata about a bundled or user-defined import template.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct TemplateMeta {
 	pub name: String,

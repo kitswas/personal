@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::{
 	AppState,
 	error::AppError,
+	ipc::IpcResponse,
 	models::{BatchResult, ParsedRow, TemplateMeta, ValidRow},
 	template::types::{ColumnMapping, ImportTemplate},
 };
@@ -64,12 +65,15 @@ fn get_builtin_templates() -> Vec<ImportTemplate> {
 }
 
 #[tauri::command]
-pub fn list_templates(state: State<'_, AppState>) -> Result<Vec<TemplateMeta>, String> {
+pub fn list_templates(
+	state: State<'_, AppState>,
+) -> IpcResponse<Vec<TemplateMeta>, AppError> {
 	let _ = state;
-	Ok(get_builtin_templates()
+	let result: Result<Vec<TemplateMeta>, AppError> = Ok(get_builtin_templates()
 		.into_iter()
 		.map(|t| t.meta)
-		.collect())
+		.collect());
+	result.into()
 }
 
 #[tauri::command]
@@ -77,47 +81,54 @@ pub fn parse_statement(
 	state: State<'_, AppState>,
 	file_path: String,
 	template_name: String,
-) -> Result<Vec<ParsedRow>, String> {
-	let _ = state; // We don't strictly need DB here yet, unless we run the classifier.
+) -> IpcResponse<Vec<ParsedRow>, AppError> {
+	let result = (|| -> Result<Vec<ParsedRow>, AppError> {
+		let _ = state; // We don't strictly need DB here yet, unless we run the classifier.
 
-	let template = get_builtin_templates()
-		.into_iter()
-		.find(|t| t.meta.name == template_name)
-		.ok_or_else(|| format!("Template '{}' not found", template_name))?;
+		let template = get_builtin_templates()
+			.into_iter()
+			.find(|t| t.meta.name == template_name)
+			.ok_or_else(|| {
+				AppError::Other(format!("Template '{}' not found", template_name))
+			})?;
 
-	let path = Path::new(&file_path);
-	crate::parser::parse_statement(path, &template).map_err(|e| e.to_string())
+		let path = Path::new(&file_path);
+		crate::parser::parse_statement(path, &template)
+			.map_err(|e| AppError::Other(e.to_string()))
+	})();
+	result.into()
 }
 
 #[tauri::command]
 pub fn commit_import_batch(
 	state: State<'_, AppState>,
 	rows: Vec<ValidRow>,
-) -> Result<BatchResult, String> {
-	if rows.is_empty() {
-		return Ok(BatchResult {
-			committed: 0,
-			failed: 0,
-		});
-	}
+) -> IpcResponse<BatchResult, AppError> {
+	let result = (|| -> Result<BatchResult, AppError> {
+		if rows.is_empty() {
+			return Ok(BatchResult {
+				committed: 0,
+				failed: 0,
+			});
+		}
 
-	with_conn(&state, move |conn| {
-        conn.execute("BEGIN", []).map_err(AppError::Db)?;
+		with_conn(&state, move |conn| {
+			conn.execute("BEGIN", []).map_err(AppError::from)?;
 
-        let mut committed = 0;
-        let mut failed = 0;
+			let mut committed = 0;
+			let mut failed = 0;
 
-        for row in rows {
-            let res = (|| -> Result<(), rusqlite::Error> {
-                let txn_id = Uuid::new_v4().to_string();
-                conn.execute(
-                    "INSERT INTO transactions (id, date, payee, notes) VALUES (?1, ?2, ?3, '')",
-                    rusqlite::params![txn_id, row.date, row.payee],
-                )?;
+			for row in rows {
+				let res = (|| -> Result<(), rusqlite::Error> {
+					let txn_id = Uuid::new_v4().to_string();
+					conn.execute(
+						"INSERT INTO transactions (id, date, payee, notes) VALUES (?1, ?2, ?3, '')",
+						rusqlite::params![txn_id, row.date, row.payee],
+					)?;
 
-                // Posting 1: Category / Expense Account
-                let posting_1 = Uuid::new_v4().to_string();
-                conn.execute(
+					// Posting 1: Category / Expense Account
+					let posting_1 = Uuid::new_v4().to_string();
+					conn.execute(
                     "INSERT INTO postings (id, transaction_id, account_id, amount, commodity) VALUES (?1, ?2, ?3, ?4, ?5)",
                     rusqlite::params![
                         posting_1,
@@ -128,9 +139,9 @@ pub fn commit_import_batch(
                     ],
                 )?;
 
-                // Posting 2: Offset / Bank Account
-                let posting_2 = Uuid::new_v4().to_string();
-                conn.execute(
+					// Posting 2: Offset / Bank Account
+					let posting_2 = Uuid::new_v4().to_string();
+					conn.execute(
                     "INSERT INTO postings (id, transaction_id, account_id, amount, commodity) VALUES (?1, ?2, ?3, ?4, ?5)",
                     rusqlite::params![
                         posting_2,
@@ -141,18 +152,19 @@ pub fn commit_import_batch(
                     ],
                 )?;
 
-                Ok(())
-            })();
+					Ok(())
+				})();
 
-            if res.is_ok() {
-                committed += 1;
-            } else {
-                failed += 1;
-            }
-        }
+				if res.is_ok() {
+					committed += 1;
+				} else {
+					failed += 1;
+				}
+			}
 
-        conn.execute("COMMIT", []).map_err(AppError::Db)?;
-        Ok(BatchResult { committed, failed })
-    })
-    .map_err(String::from)
+			conn.execute("COMMIT", []).map_err(AppError::from)?;
+			Ok(BatchResult { committed, failed })
+		})
+	})();
+	result.into()
 }

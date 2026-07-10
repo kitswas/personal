@@ -5,6 +5,7 @@ pub mod classifier;
 pub mod commands;
 pub mod db;
 pub mod error;
+pub mod ipc;
 pub mod models;
 pub mod parser;
 pub mod template;

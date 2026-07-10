@@ -1,13 +1,18 @@
+use serde::Serialize;
+use ts_rs::TS;
+
 /// Typed error enum for all application errors.
 ///
 /// Every variant maps to a human-readable string via [`std::fmt::Display`].
 /// Tauri commands serialize errors as `String` at the IPC boundary — callers
 /// receive the `Display` representation.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Serialize, TS)]
+#[serde(tag = "type", content = "message")]
+#[ts(export, export_to = "../../src/types/ipc_bindings.ts")]
 pub enum AppError {
 	/// SQLite / rusqlite error.
 	#[error("Database error: {0}")]
-	Db(#[from] rusqlite::Error),
+	Db(String),
 
 	/// The master password supplied by the user is incorrect.
 	#[error("Incorrect master password")]
@@ -39,7 +44,7 @@ pub enum AppError {
 
 	/// A generic I/O error (file operations).
 	#[error("I/O error: {0}")]
-	Io(#[from] std::io::Error),
+	Io(String),
 
 	/// Catch-all for errors that cannot be categorised more specifically.
 	#[error("{0}")]
@@ -49,6 +54,18 @@ pub enum AppError {
 impl From<AppError> for String {
 	fn from(e: AppError) -> String {
 		e.to_string()
+	}
+}
+
+impl From<rusqlite::Error> for AppError {
+	fn from(e: rusqlite::Error) -> Self {
+		AppError::Db(e.to_string())
+	}
+}
+
+impl From<std::io::Error> for AppError {
+	fn from(e: std::io::Error) -> Self {
+		AppError::Io(e.to_string())
 	}
 }
 

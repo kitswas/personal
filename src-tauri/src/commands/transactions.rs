@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::{
 	AppState,
 	error::AppError,
+	ipc::IpcResponse,
 	models::{BalanceEntry, Posting, PostingInput, Transaction, TransactionWithPostings},
 };
 
@@ -43,7 +44,7 @@ fn list_transactions_inner(
 	with_conn(state, |conn| {
         let mut stmt = conn
             .prepare("SELECT id, date, payee, notes FROM transactions ORDER BY date DESC LIMIT ?1 OFFSET ?2")
-            .map_err(AppError::Db)?;
+            .map_err(AppError::from)?;
         
         let txns: Vec<Transaction> = stmt
             .query_map(rusqlite::params![limit, offset], |row| {
@@ -54,14 +55,14 @@ fn list_transactions_inner(
                     notes: row.get(3)?,
                 })
             })
-            .map_err(AppError::Db)?
+            .map_err(AppError::from)?
             .collect::<rusqlite::Result<Vec<Transaction>>>()
-            .map_err(AppError::Db)?;
+            .map_err(AppError::from)?;
 
         let mut result = Vec::with_capacity(txns.len());
         let mut post_stmt = conn
             .prepare("SELECT id, transaction_id, account_id, amount, commodity FROM postings WHERE transaction_id = ?1")
-            .map_err(AppError::Db)?;
+            .map_err(AppError::from)?;
 
         for txn in txns {
             let postings = post_stmt
@@ -74,9 +75,9 @@ fn list_transactions_inner(
                         commodity: row.get(4)?,
                     })
                 })
-                .map_err(AppError::Db)?
+                .map_err(AppError::from)?
                 .collect::<rusqlite::Result<Vec<Posting>>>()
-                .map_err(AppError::Db)?;
+                .map_err(AppError::from)?;
 
             result.push(TransactionWithPostings {
                 transaction: txn,
@@ -119,7 +120,7 @@ fn commit_transaction_inner(
 	};
 
 	with_conn(state, move |conn| {
-        conn.execute("BEGIN", []).map_err(AppError::Db)?;
+        conn.execute("BEGIN", []).map_err(AppError::from)?;
 
         if let Err(e) = (|| -> Result<(), rusqlite::Error> {
             conn.execute(
@@ -143,10 +144,10 @@ fn commit_transaction_inner(
             Ok(())
         })() {
             let _ = conn.execute("ROLLBACK", []);
-            return Err(AppError::Db(e));
+            return Err(AppError::from(e));
         }
 
-        conn.execute("COMMIT", []).map_err(AppError::Db)?;
+        conn.execute("COMMIT", []).map_err(AppError::from)?;
         Ok(txn)
     })
     .map_err(String::from)
@@ -159,7 +160,7 @@ fn delete_transaction_inner(state: &AppState, id: String) -> Result<(), String> 
 				"DELETE FROM transactions WHERE id = ?1",
 				rusqlite::params![id],
 			)
-			.map_err(AppError::Db)?;
+			.map_err(AppError::from)?;
 
 		if affected == 0 {
 			Err(AppError::Other(format!("Transaction '{}' not found", id)))
@@ -186,7 +187,7 @@ fn get_running_balances_inner(
                 ORDER BY t.date ASC
                 "#,
 			)
-			.map_err(AppError::Db)?;
+			.map_err(AppError::from)?;
 
 		let daily_deltas = stmt
 			.query_map(rusqlite::params![account_id], |row| {
@@ -194,9 +195,9 @@ fn get_running_balances_inner(
 				let delta: i64 = row.get(1)?;
 				Ok((date, delta))
 			})
-			.map_err(AppError::Db)?
+			.map_err(AppError::from)?
 			.collect::<rusqlite::Result<Vec<(String, i64)>>>()
-			.map_err(AppError::Db)?;
+			.map_err(AppError::from)?;
 
 		let mut balances = Vec::with_capacity(daily_deltas.len());
 		let mut running = 0i64;
@@ -224,8 +225,10 @@ pub fn list_transactions(
 	state: State<'_, AppState>,
 	limit: u32,
 	offset: u32,
-) -> Result<Vec<TransactionWithPostings>, String> {
+) -> IpcResponse<Vec<TransactionWithPostings>, AppError> {
 	list_transactions_inner(&state, limit, offset)
+		.map_err(|e| AppError::Other(e))
+		.into()
 }
 
 /// Commit a new double-entry transaction.
@@ -236,14 +239,21 @@ pub fn commit_transaction(
 	payee: String,
 	notes: String,
 	postings: Vec<PostingInput>,
-) -> Result<Transaction, String> {
+) -> IpcResponse<Transaction, AppError> {
 	commit_transaction_inner(&state, date, payee, notes, postings)
+		.map_err(|e| AppError::Other(e))
+		.into()
 }
 
 /// Delete a transaction by ID.
 #[tauri::command]
-pub fn delete_transaction(state: State<'_, AppState>, id: String) -> Result<(), String> {
+pub fn delete_transaction(
+	state: State<'_, AppState>,
+	id: String,
+) -> IpcResponse<(), AppError> {
 	delete_transaction_inner(&state, id)
+		.map_err(|e| AppError::Other(e))
+		.into()
 }
 
 /// Get running balances for an account, grouped by date.
@@ -251,8 +261,10 @@ pub fn delete_transaction(state: State<'_, AppState>, id: String) -> Result<(), 
 pub fn get_running_balances(
 	state: State<'_, AppState>,
 	account_id: String,
-) -> Result<Vec<BalanceEntry>, String> {
+) -> IpcResponse<Vec<BalanceEntry>, AppError> {
 	get_running_balances_inner(&state, account_id)
+		.map_err(|e| AppError::Other(e))
+		.into()
 }
 
 // ---------------------------------------------------------------------------

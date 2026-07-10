@@ -1,7 +1,7 @@
 use tauri::State;
 use uuid::Uuid;
 
-use crate::{AppState, error::AppError, models::Account};
+use crate::{AppState, error::AppError, ipc::IpcResponse, models::Account};
 
 // ---------------------------------------------------------------------------
 // Helper — borrow the live connection or return a typed error
@@ -70,21 +70,21 @@ fn validate_commodity(commodity: &str) -> Result<(), AppError> {
 
 /// List all accounts ordered by type then name.
 #[tauri::command]
-pub fn list_accounts(state: State<'_, AppState>) -> Result<Vec<Account>, String> {
+pub fn list_accounts(state: State<'_, AppState>) -> IpcResponse<Vec<Account>, AppError> {
 	with_conn(&state, |conn| {
 		let mut stmt = conn
 			.prepare("SELECT id, name, type, commodity FROM accounts ORDER BY type, name")
-			.map_err(AppError::Db)?;
+			.map_err(AppError::from)?;
 
 		let rows = stmt
 			.query_map([], row_to_account)
-			.map_err(AppError::Db)?
+			.map_err(AppError::from)?
 			.collect::<rusqlite::Result<Vec<Account>>>()
-			.map_err(AppError::Db)?;
+			.map_err(AppError::from)?;
 
 		Ok(rows)
 	})
-	.map_err(String::from)
+	.into()
 }
 
 /// Create a new account. Returns the generated UUID.
@@ -94,28 +94,30 @@ pub fn create_account(
 	name: String,
 	account_type: String,
 	commodity: String,
-) -> Result<String, String> {
-	validate_account_type(&account_type).map_err(String::from)?;
-	validate_commodity(&commodity).map_err(String::from)?;
+) -> IpcResponse<String, AppError> {
+	let result = (|| -> Result<String, AppError> {
+		validate_account_type(&account_type)?;
+		validate_commodity(&commodity)?;
 
-	if name.trim().is_empty() {
-		return Err("Account name must not be empty".into());
-	}
+		if name.trim().is_empty() {
+			return Err(AppError::Other("Account name must not be empty".into()));
+		}
 
-	let id = Uuid::new_v4().to_string();
-	let id_clone = id.clone();
+		let id = Uuid::new_v4().to_string();
+		let id_clone = id.clone();
 
-	with_conn(&state, move |conn| {
-		conn.execute(
-			"INSERT INTO accounts (id, name, type, commodity) VALUES (?1, ?2, ?3, ?4)",
-			rusqlite::params![id_clone, name.trim(), account_type, commodity],
-		)
-		.map_err(AppError::Db)?;
-		Ok(id_clone)
-	})
-	.map_err(String::from)?;
+		with_conn(&state, move |conn| {
+			conn.execute(
+				"INSERT INTO accounts (id, name, type, commodity) VALUES (?1, ?2, ?3, ?4)",
+				rusqlite::params![id_clone, name.trim(), account_type, commodity],
+			)
+			.map_err(AppError::from)?;
+			Ok(id_clone)
+		})?;
 
-	Ok(id)
+		Ok(id)
+	})();
+	result.into()
 }
 
 /// Update an existing account's name, type, and commodity.
@@ -126,34 +128,40 @@ pub fn update_account(
 	name: String,
 	account_type: String,
 	commodity: String,
-) -> Result<(), String> {
-	validate_account_type(&account_type).map_err(String::from)?;
-	validate_commodity(&commodity).map_err(String::from)?;
+) -> IpcResponse<(), AppError> {
+	let result = (|| -> Result<(), AppError> {
+		validate_account_type(&account_type)?;
+		validate_commodity(&commodity)?;
 
-	if name.trim().is_empty() {
-		return Err("Account name must not be empty".into());
-	}
-
-	with_conn(&state, |conn| {
-		let affected = conn
-			.execute(
-				"UPDATE accounts SET name = ?1, type = ?2, commodity = ?3 WHERE id = ?4",
-				rusqlite::params![name.trim(), account_type, commodity, id],
-			)
-			.map_err(AppError::Db)?;
-
-		if affected == 0 {
-			Err(AppError::Other(format!("Account '{}' not found", id)))
-		} else {
-			Ok(())
+		if name.trim().is_empty() {
+			return Err(AppError::Other("Account name must not be empty".into()));
 		}
-	})
-	.map_err(String::from)
+
+		with_conn(&state, |conn| {
+			let affected = conn
+				.execute(
+					"UPDATE accounts SET name = ?1, type = ?2, commodity = ?3 WHERE id = ?4",
+					rusqlite::params![name.trim(), account_type, commodity, id],
+				)
+				.map_err(AppError::from)?;
+
+			if affected == 0 {
+				Err(AppError::Other(format!("Account '{}' not found", id)))
+			} else {
+				Ok(())
+			}
+		})?;
+		Ok(())
+	})();
+	result.into()
 }
 
 /// Delete an account. Fails if the account has any postings attached.
 #[tauri::command]
-pub fn delete_account(state: State<'_, AppState>, id: String) -> Result<(), String> {
+pub fn delete_account(
+	state: State<'_, AppState>,
+	id: String,
+) -> IpcResponse<(), AppError> {
 	with_conn(&state, |conn| {
 		// Check no postings reference this account.
 		let count: i64 = conn
@@ -162,7 +170,7 @@ pub fn delete_account(state: State<'_, AppState>, id: String) -> Result<(), Stri
 				rusqlite::params![id],
 				|row| row.get(0),
 			)
-			.map_err(AppError::Db)?;
+			.map_err(AppError::from)?;
 
 		if count > 0 {
 			return Err(AppError::Other(format!(
@@ -173,7 +181,7 @@ pub fn delete_account(state: State<'_, AppState>, id: String) -> Result<(), Stri
 
 		let affected = conn
 			.execute("DELETE FROM accounts WHERE id = ?1", rusqlite::params![id])
-			.map_err(AppError::Db)?;
+			.map_err(AppError::from)?;
 
 		if affected == 0 {
 			Err(AppError::Other(format!("Account '{}' not found", id)))
@@ -181,12 +189,14 @@ pub fn delete_account(state: State<'_, AppState>, id: String) -> Result<(), Stri
 			Ok(())
 		}
 	})
-	.map_err(String::from)
+	.into()
 }
 
 /// Return the default commodity stored in settings.
 #[tauri::command]
-pub fn get_default_commodity(state: State<'_, AppState>) -> Result<String, String> {
+pub fn get_default_commodity(
+	state: State<'_, AppState>,
+) -> IpcResponse<String, AppError> {
 	with_conn(&state, |conn| {
 		let result: rusqlite::Result<String> = conn.query_row(
 			"SELECT value FROM settings WHERE key = 'default_commodity'",
@@ -196,10 +206,10 @@ pub fn get_default_commodity(state: State<'_, AppState>) -> Result<String, Strin
 		match result {
 			Ok(v) => Ok(v),
 			Err(rusqlite::Error::QueryReturnedNoRows) => Ok("USD".into()),
-			Err(e) => Err(AppError::Db(e)),
+			Err(e) => Err(AppError::from(e)),
 		}
 	})
-	.map_err(String::from)
+	.into()
 }
 
 // ---------------------------------------------------------------------------

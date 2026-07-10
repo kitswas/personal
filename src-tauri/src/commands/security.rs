@@ -1,7 +1,7 @@
 use keyring::Entry;
 use tauri::State;
 
-use crate::{AppState, db, error::AppError};
+use crate::{AppState, db, error::AppError, ipc::IpcResponse};
 
 // ---------------------------------------------------------------------------
 // Keyring helpers (pure functions over the keyring service)
@@ -57,8 +57,8 @@ where
 /// Returns `false` if the key is absent or the DB has not been unlocked yet
 /// (treated as "not done" so the UI routes to onboarding).
 #[tauri::command]
-pub fn is_onboarding_done(state: State<'_, AppState>) -> Result<bool, String> {
-	with_conn(&state, db::is_onboarding_done).map_err(String::from)
+pub fn is_onboarding_done(state: State<'_, AppState>) -> IpcResponse<bool, AppError> {
+	with_conn(&state, db::is_onboarding_done).into()
 }
 
 /// Attempt to unlock the database with the master password stored in the OS keyring.
@@ -68,37 +68,40 @@ pub fn is_onboarding_done(state: State<'_, AppState>) -> Result<bool, String> {
 ///
 /// Returns `true` on success, `false` if the stored key does not match.
 #[tauri::command]
-pub fn unlock(state: State<'_, AppState>) -> Result<bool, String> {
-	// If already unlocked, return early.
-	{
-		let guard = state
-			.db
-			.lock()
-			.map_err(|_| "DB mutex poisoned".to_string())?;
-		if guard.is_some() {
-			return Ok(true);
-		}
-	}
-
-	let key = match load_key() {
-		Ok(k) => k,
-		// No key in keyring yet — onboarding has not been completed.
-		Err(_) => return Ok(false),
-	};
-
-	match db::open(&state.db_path, &key) {
-		Ok(conn) => {
-			db::run_migrations(&conn).map_err(String::from)?;
-			let mut guard = state
+pub fn unlock(state: State<'_, AppState>) -> IpcResponse<bool, AppError> {
+	let result = (|| -> Result<bool, AppError> {
+		// If already unlocked, return early.
+		{
+			let guard = state
 				.db
 				.lock()
-				.map_err(|_| "DB mutex poisoned".to_string())?;
-			*guard = Some(conn);
-			Ok(true)
-		},
-		Err(AppError::WrongPassword) => Ok(false),
-		Err(e) => Err(e.to_string()),
-	}
+				.map_err(|_| AppError::Other("DB mutex poisoned".to_string()))?;
+			if guard.is_some() {
+				return Ok(true);
+			}
+		}
+
+		let key = match load_key() {
+			Ok(k) => k,
+			// No key in keyring yet — onboarding has not been completed.
+			Err(_) => return Ok(false),
+		};
+
+		match db::open(&state.db_path, &key) {
+			Ok(conn) => {
+				db::run_migrations(&conn)?;
+				let mut guard = state
+					.db
+					.lock()
+					.map_err(|_| AppError::Other("DB mutex poisoned".to_string()))?;
+				*guard = Some(conn);
+				Ok(true)
+			},
+			Err(AppError::WrongPassword) => Ok(false),
+			Err(e) => Err(e),
+		}
+	})();
+	result.into()
 }
 
 /// Complete onboarding: store the master password in the OS keyring and
@@ -112,40 +115,43 @@ pub fn setup_master_password(
 	state: State<'_, AppState>,
 	password: String,
 	default_currency: String,
-) -> Result<(), String> {
-	// Validate currency code: must be 3 uppercase ASCII letters.
-	if !is_valid_currency_code(&default_currency) {
-		return Err(format!(
-			"Invalid currency code '{}': must be 3 uppercase ASCII letters",
-			default_currency
-		));
-	}
+) -> IpcResponse<(), AppError> {
+	let result = (|| -> Result<(), AppError> {
+		// Validate currency code: must be 3 uppercase ASCII letters.
+		if !is_valid_currency_code(&default_currency) {
+			return Err(AppError::Other(format!(
+				"Invalid currency code '{}': must be 3 uppercase ASCII letters",
+				default_currency
+			)));
+		}
 
-	// Open (or create) the DB with the new password.
-	let conn = db::open(&state.db_path, &password).map_err(String::from)?;
-	db::run_migrations(&conn).map_err(String::from)?;
+		// Open (or create) the DB with the new password.
+		let conn = db::open(&state.db_path, &password)?;
+		db::run_migrations(&conn)?;
 
-	// Write settings atomically: onboarding_complete + default_commodity.
-	conn.execute_batch(&format!(
+		// Write settings atomically: onboarding_complete + default_commodity.
+		conn.execute_batch(&format!(
         "BEGIN;
          INSERT OR REPLACE INTO settings (key, value) VALUES ('default_commodity', '{currency}');
          INSERT OR REPLACE INTO settings (key, value) VALUES ('onboarding_complete', 'true');
          COMMIT;",
         currency = default_currency.replace('\'', "''")
     ))
-    .map_err(|e| AppError::Db(e).to_string())?;
+    .map_err(AppError::from)?;
 
-	// Store the key in the OS keyring.
-	store_key(&password).map_err(String::from)?;
+		// Store the key in the OS keyring.
+		store_key(&password)?;
 
-	// Install the connection into AppState.
-	let mut guard = state
-		.db
-		.lock()
-		.map_err(|_| "DB mutex poisoned".to_string())?;
-	*guard = Some(conn);
+		// Install the connection into AppState.
+		let mut guard = state
+			.db
+			.lock()
+			.map_err(|_| AppError::Other("DB mutex poisoned".to_string()))?;
+		*guard = Some(conn);
 
-	Ok(())
+		Ok(())
+	})();
+	result.into()
 }
 
 /// Change the master password.
@@ -157,25 +163,27 @@ pub fn change_master_password(
 	state: State<'_, AppState>,
 	old_password: String,
 	new_password: String,
-) -> Result<(), String> {
-	// Verify the old key matches what we have stored.
-	let stored_key = load_key().map_err(String::from)?;
-	if stored_key != old_password {
-		return Err(AppError::WrongPassword.to_string());
-	}
+) -> IpcResponse<(), AppError> {
+	let result = (|| -> Result<(), AppError> {
+		// Verify the old key matches what we have stored.
+		let stored_key = load_key()?;
+		if stored_key != old_password {
+			return Err(AppError::WrongPassword);
+		}
 
-	with_conn(&state, |conn| {
-		let rekey_pragma =
-			format!("PRAGMA rekey = '{}';", new_password.replace('\'', "''"));
-		conn.execute_batch(&rekey_pragma).map_err(AppError::Db)
-	})
-	.map_err(String::from)?;
+		with_conn(&state, |conn| {
+			let rekey_pragma =
+				format!("PRAGMA rekey = '{}';", new_password.replace('\'', "''"));
+			conn.execute_batch(&rekey_pragma).map_err(AppError::from)
+		})?;
 
-	// Update the keyring to the new key.
-	delete_key().map_err(String::from)?;
-	store_key(&new_password).map_err(String::from)?;
+		// Update the keyring to the new key.
+		delete_key()?;
+		store_key(&new_password)?;
 
-	Ok(())
+		Ok(())
+	})();
+	result.into()
 }
 
 // ---------------------------------------------------------------------------
