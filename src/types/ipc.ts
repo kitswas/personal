@@ -1,6 +1,6 @@
-import { IpcResponse, AppError } from "./ipc_bindings";
+import type { AppError, IpcResponse } from "./ipc_bindings";
 
-export type { IpcResponse, AppError };
+export type { AppError, IpcResponse };
 
 export type IpcState<T, E> =
 	| { _tag: "Idle" }

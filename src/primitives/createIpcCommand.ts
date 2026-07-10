@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import type { IpcState, IpcResponse } from "../types/ipc";
+import type { IpcResponse, IpcState } from "../types/ipc";
 
 export function createIpcCommand<Args extends any[], T, E>(
 	commandFn: (...args: Args) => Promise<IpcResponse<T, E>>,

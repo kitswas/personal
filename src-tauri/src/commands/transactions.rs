@@ -45,7 +45,7 @@ fn list_transactions_inner(
         let mut stmt = conn
             .prepare("SELECT id, date, payee, notes FROM transactions ORDER BY date DESC LIMIT ?1 OFFSET ?2")
             .map_err(AppError::from)?;
-        
+
         let txns: Vec<Transaction> = stmt
             .query_map(rusqlite::params![limit, offset], |row| {
                 Ok(Transaction {
