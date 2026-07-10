@@ -48,7 +48,7 @@ pnpm prepare # to set up git hooks
 To start the application in development mode (which spins up both the Vite frontend server and the Tauri backend watcher):
 
 ```bash
-pnpm tauri dev
+pnpm tauri dev # -- --target x86_64-pc-windows-msvc on Windows
 ```
 
 ### Validation Commands
