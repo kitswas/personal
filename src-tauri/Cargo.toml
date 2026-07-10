@@ -35,7 +35,7 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 keyring = "4.1.4"
 
 # Excel / CSV parsing for import pipeline (Phase 2+).
-calamine = "0.36.0"
+calamine = { version = "0.36.0", features = ["dates"] }
 csv = "1"
 
 # TOML for import templates (Phase 2+).

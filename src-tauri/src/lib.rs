@@ -1,10 +1,13 @@
 #![deny(unsafe_code)]
 // Deny unsafe in all application code per AGENTS.md §6 and ADR 0001.
 
+pub mod classifier;
 pub mod commands;
 pub mod db;
 pub mod error;
 pub mod models;
+pub mod parser;
+pub mod template;
 
 use std::sync::{Arc, Mutex};
 
@@ -36,7 +39,10 @@ pub fn run() {
 			commands::transactions::list_transactions,
 			commands::transactions::commit_transaction,
 			commands::transactions::delete_transaction,
-			commands::transactions::get_running_balances
+			commands::transactions::get_running_balances,
+			commands::import::list_templates,
+			commands::import::parse_statement,
+			commands::import::commit_import_batch
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
