@@ -14,9 +14,9 @@ the master key never touches the disk.
 | Layer             | Choice                                             | Reason                                             |
 | ----------------- | -------------------------------------------------- | -------------------------------------------------- |
 | Runtime           | Tauri v2                                           | Tiny footprint, future mobile targets              |
-| Frontend          | Svelte 5 + TypeScript                              | Path A from blueprint; already scaffolded          |
+| Frontend          | SolidJS + TypeScript                              | Path A from blueprint; already scaffolded          |
 | Styling           | Oat.ink + plain CSS (fluid units)                  | Blueprint requirement; no Tailwind                 |
-| Charts            | SveltePlot                                         | Grammar-of-graphics for analytics                  |
+| Charts            | Unovis                                         | Grammar-of-graphics for analytics                  |
 | Backend           | Rust                                               | Memory-safe systems language                       |
 | DB                | SQLite encrypted via SQLCipher                     | Full-page AES-256 encryption at rest               |
 | Encryption driver | `rusqlite` with `bundled-sqlcipher`                | Requires external OpenSSL/LibreSSL to be installed |
@@ -39,7 +39,7 @@ terminate and every reachable state must satisfy the program invariants.
   are isolated to the command handlers and `db.rs`. No global mutable state
   outside of `tauri::State`. All mutation goes through a single `Mutex`-guarded
   connection handle.
-- **Svelte frontend:** Derived state only via `$derived` / `$derived.by`.
+- **SolidJS frontend:** Derived state only via `createMemo`.
   No implicit side-effect chains. Event handlers are pure transformations
   returning new state.
 - **No panics in library code.** `unwrap()` and `expect()` are banned outside
@@ -91,10 +91,10 @@ is_onboarding_done()? ──No──> /onboarding (multi-step wizard)
 |  |              Tauri Application Process               |  |
 |  |                                                      |  |
 |  |  +-----------------------+  +---------------------+  |  |
-|  |  |   Svelte 5 Frontend   |  |    Rust Backend     |  |  |
+|  |  |   SolidJS Frontend   |  |    Rust Backend     |  |  |
 |  |  |                       |  |                     |  |  |
 |  |  |  Oat.ink UI           |<-|  IPC Command        |  |  |
-|  |  |  SveltePlot           |  |  Handler            |  |  |
+|  |  |  Unovis           |  |  Handler            |  |  |
 |  |  |  Triage Grid          |->|                     |  |  |
 |  |  |  pretext layout       |  |  calamine / csv     |  |  |
 |  |  |                       |  |  TOML Templates     |  |  |
@@ -430,12 +430,12 @@ Three modes: **System** (default) / **Light** / **Dark**.
 }
 ```
 
-#### `src/routes/+layout.svelte`
+#### `src/App.tsx`
 
 - Calls `is_onboarding_done()` on mount; redirects to `/onboarding` if false
 - Reads `localStorage` for `{ navCollapsed, detailCollapsed }` and `theme` on mount
 - CSS Grid with named areas: `"nav list detail"` — column widths derived from
-  collapse state via `$derived` rune:
+  collapse state via `createMemo`:
 
     ```
     navCollapsed=false, detailCollapsed=false  →  3fr 4fr 3fr
@@ -456,7 +456,7 @@ Three modes: **System** (default) / **Light** / **Dark**.
 ### Phase 4 — Onboarding Flow
 
 First-run flow shown before the main UI when `is_onboarding_done()` is false.
-The wizard maintains step progress in local Svelte state only — not persisted
+The wizard maintains step progress in local SolidJS state only — not persisted
 until the final step to preserve atomicity.
 
 ```
@@ -477,40 +477,40 @@ Screen 4: Seed Accounts (optional)
   [Finish Setup]  <-- calls setup_master_password(); writes onboarding_complete=true
 ```
 
-`src/routes/onboarding/+page.svelte` — multi-step wizard component.
-`+layout.svelte` redirects to `/onboarding` if `is_onboarding_done()` returns false.
+`src/pages/onboarding/index.tsx` — multi-step wizard component.
+`App.tsx` redirects to `/onboarding` if `is_onboarding_done()` returns false.
 All wizard state is local `$state`; the IPC call is made only on the final screen.
 
 ---
 
 ### Phase 5 — Core Pages
 
-#### Dashboard (`src/routes/+page.svelte`)
+#### Dashboard (`src/pages/index.tsx`)
 
 - Net worth card (sum of all asset accounts)
 - 30-day income vs expense summary bar
 - Last 10 transactions list
 - Quick-add transaction button
 
-#### Accounts (`src/routes/accounts/+page.svelte`)
+#### Accounts (`src/pages/accounts/index.tsx`)
 
 - Accounts grouped by type with running balances
 - Add account modal (name, type, commodity)
 - Delete with confirmation if account has associated postings
 
-#### Transactions (`src/routes/transactions/+page.svelte`)
+#### Transactions (`src/pages/transactions/index.tsx`)
 
 - Paginated ledger: date / payee / amount columns
 - Expand row to see postings
 - Manual entry form:
-  - Client side: `$derived` balance sum; Submit disabled when != 0
+  - Client side: `createMemo` balance sum; Submit disabled when != 0
   - Server side: Rust enforces SUM = 0 before writing; `Err` surfaced as toast
 
 ---
 
 ### Phase 6 — Import / Triage Grid
 
-`src/routes/import/+page.svelte` — the most complex page.
+`src/pages/import/index.tsx` — the most complex page.
 
 ```
 +--------------------------------------------------+
@@ -537,7 +537,7 @@ Data flow is a pure pipeline:
 File bytes
   -> parse_statement()     [Rust: calamine/csv + TOML template]
   -> Vec<ParsedRow>        [IPC boundary: serialised JSON]
-  -> triage UI state       [Svelte: pure $derived view]
+  -> triage UI state       [SolidJS: pure createMemo view]
   -> user edits            [local state mutations only]
   -> commit_import_batch() [Rust: DB transaction]
 ```
@@ -546,11 +546,11 @@ File bytes
 
 ### Phase 7 — Analytics
 
-`src/routes/analytics/+page.svelte`
+`src/pages/analytics/index.tsx`
 
-- Monthly income vs expense (SveltePlot bar chart)
-- Running balance per account over time (SveltePlot line chart)
-- Top spending categories (SveltePlot area / donut chart)
+- Monthly income vs expense (Unovis bar chart)
+- Running balance per account over time (Unovis line chart)
+- Top spending categories (Unovis area / donut chart)
 
 ---
 
@@ -658,14 +658,14 @@ Corpus: place at least one valid sample file per target in
 ### Layer 3 — Component Tests (Vitest)
 
 ```bash
-pnpm add -D vitest @testing-library/svelte @vitest/coverage-v8
+pnpm add -D vitest @solidjs/testing-library @vitest/coverage-v8
 ```
 
 | Test                                  | Asserts                                                                   |
 | ------------------------------------- | ------------------------------------------------------------------------- |
 | Triage grid: `ParsedRow::Valid` row   | Green class applied; no error text rendered                               |
 | Triage grid: `ParsedRow::Invalid` row | Red class applied; `error_reason` text present                            |
-| Manual entry form                     | Submit button disabled when `$derived` SUM != 0                           |
+| Manual entry form                     | Submit button disabled when `createMemo` SUM != 0                           |
 | Manual entry form                     | Submit button enabled when SUM = 0                                        |
 | Balance card                          | Correct INR formatting (paise to rupees, locale-aware)                    |
 | Onboarding: step 2                    | Next button disabled until passwords match                                |
@@ -845,8 +845,7 @@ personal/
 │       ├── ci.yml                       [NEW] lint + Rust check + unit + component + E2E
 │       ├── release.yml                  [NEW] cross-platform build & GitHub Release
 │       └── docs.yml                     [NEW] generate & deploy docs to GitHub Pages
-├── svelte.config.js
-├── vite.config.js
+├── vite.config.ts
 ├── tsconfig.json                        [MODIFY] add noUncheckedIndexedAccess
 │
 ├── e2e/                                 [NEW dir]
@@ -864,21 +863,21 @@ personal/
 │   ├── app.css                          [NEW] design tokens
 │   ├── app.html
 │   └── routes/
-│       ├── +layout.svelte               [MODIFY] sidebar shell + onboarding guard
+│       ├── App.tsx               [MODIFY] sidebar shell + onboarding guard
 │       ├── +layout.ts
-│       ├── +page.svelte                 [MODIFY] dashboard
+│       ├── index.tsx                 [MODIFY] dashboard
 │       ├── onboarding/
-│       │   └── +page.svelte             [NEW] multi-step wizard
+│       │   └── index.tsx             [NEW] multi-step wizard
 │       ├── accounts/
-│       │   └── +page.svelte             [NEW]
+│       │   └── index.tsx             [NEW]
 │       ├── transactions/
-│       │   └── +page.svelte             [NEW]
+│       │   └── index.tsx             [NEW]
 │       ├── import/
-│       │   └── +page.svelte             [NEW] triage grid
+│       │   └── index.tsx             [NEW] triage grid
 │       ├── analytics/
-│       │   └── +page.svelte             [NEW]
+│       │   └── index.tsx             [NEW]
 │       └── settings/
-│           └── +page.svelte             [NEW]
+│           └── index.tsx             [NEW]
 │
 └── src-tauri/
     ├── Cargo.toml                       [MODIFY] add all crates
@@ -1137,11 +1136,11 @@ jobs:
 | 4   | Onboarding             | `is_onboarding_done()` guard + multi-step wizard                                                   | Low    |
 | 5   | Core pages             | Accounts, Transactions, Dashboard                                                                  | High   |
 | 6   | Import / Triage Grid   | Full parse -> review -> commit pipeline                                                            | High   |
-| 7   | Analytics charts       | SveltePlot visualisations                                                                          | Medium |
+| 7   | Analytics charts       | Unovis visualisations                                                                          | Medium |
 | 8   | Import templates       | 5 pre-bundled TOML templates                                                                       | Low    |
 | 9   | Security hardening     | CSP, capabilities, WAL                                                                             | Medium |
 | 10  | Fuzz tests             | 4 targets with corpus seeds                                                                        | Medium |
-| 11  | Component tests        | Vitest + @testing-library/svelte                                                                   | Medium |
+| 11  | Component tests        | Vitest + @solidjs/testing-library                                                                   | Medium |
 | 12  | E2E tests              | Playwright + tauri-driver; all spec files                                                          | High   |
 
 ---

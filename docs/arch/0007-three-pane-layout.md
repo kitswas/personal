@@ -63,8 +63,8 @@ widths anywhere.
 
 ### Responsive collapse strategy
 
-The layout collapses progressively via CSS media queries and a Svelte
-`$derived` `layoutMode` rune — no JavaScript resize observers needed.
+The layout collapses progressively via CSS media queries and a SolidJS
+`createMemo` `layoutMode` — no JavaScript resize observers needed.
 
 | Viewport            | Columns                               | Detail pane                                                                            |
 | ------------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -100,7 +100,7 @@ This prevents the jarring "grey void" common in 3-pane apps when first loading.
   blueprint's mobile-first fluid requirement without a separate mobile codebase.
 - **Good:** The detail pane doubles as a quick-action surface (quick-add form),
   reducing modal usage.
-- **Trade-off:** The right detail pane adds a `$derived` context store
+- **Trade-off:** The right detail pane adds a `createMemo` context store
   (`selectedItem`) that must be kept in sync with navigation. This is the
   one piece of shared cross-pane state; it lives in `src/lib/stores/selection.ts`
   and is the single source of truth (per ADR 0001's no-duplication rule).

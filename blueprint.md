@@ -24,13 +24,13 @@ This application relies on a strict separation of concerns. The Rust backend act
 
 The backend API contract (Tauri IPC) is identical for both paths.
 
-- **Path A: The Reactive Path (Svelte)**
+- **Path A: The Reactive Path (SolidJS)**
 
-  - **Framework:** Svelte 5 + TypeScript
+  - **Framework:** SolidJS + TypeScript
 
-  - **Data Visualization:** SveltePlot
+  - **Data Visualization:** Unovis
 
-  - **Pros:** Svelte handles the complex UI state changes in the Triage grid automatically.
+  - **Pros:** SolidJS handles the complex UI state changes in the Triage grid automatically.
 
 - **Path B: The Minimalist Path (Vanilla TS + Micro-libs)**
 
@@ -56,7 +56,7 @@ graph TD
         end
 
         subgraph TauriApp [Tauri Cross-Platform Application]
-            subgraph Frontend [Frontend: Svelte OR Vanilla TS]
+            subgraph Frontend [Frontend: SolidJS OR Vanilla TS]
                 UI[UI: Fluid Oat.ink + Pretext]
                 Charts[Analytics Viz]
             end
@@ -202,11 +202,24 @@ default_account = "Asset:Checking"
 Rust maps every row to this Enum and sends it via Tauri IPC. It never panics on bad data.
 
 ```rust
-#[derive(Serialize)]
-#[serde(tag = "status")]
+#[derive(Debug, Serialize, Deserialize, Clone, TS)]
+#[serde(tag = "status", rename_all = "camelCase")]
+#[ts(export)]
 pub enum ParsedRow {
-    Valid { row_idx: usize, date: String, payee: String, amount: i64, target_account_id: String },
-    Invalid { row_idx: usize, raw_data: String, error_reason: String }
+    Valid {
+        row_idx: usize,
+        date: String,
+        payee: String,
+        amount: i64,
+        commodity: String,
+        suggested_account_id: Option<String>,
+        confidence: f32,
+    },
+    Invalid {
+        row_idx: usize,
+        raw_data: String,
+        error_reason: String,
+    }
 }
 
 ```
@@ -236,5 +249,5 @@ To maintain the project's focus, the following technologies were explicitly eval
 - **Pretext:** `https://github.com/chenglou/pretext` (Typography/reflow handling).
 - **Paisa:** `https://github.com/ananthakumaran/paisa` (Inspiration for UI, lesson on text-to-SQL sync fragility).
 - **TigerBeetle:** `https://tigerbeetle.com/` (Inspiration for strict correctness).
-- **SveltePlot:** `https://svelteplot.dev/` (Grammar of graphics for Analytics).
+- **Unovis:** `https://unovis.dev/` (Grammar of graphics for Analytics).
 - **Sahamati Standards:** `https://github.com/Sahamati/account-aggregator-standards` (Source of truth for Indian financial schema mapping).

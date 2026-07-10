@@ -1,6 +1,6 @@
 # Building the Application
 
-This project uses a combination of SvelteKit (Frontend) and Tauri/Rust (Backend) with a custom SQLite encryption driver (SQLCipher). To ensure cross-platform reproducibility, we strictly manage all developer dependencies using [`mise`](https://mise.jdx.dev/).
+This project uses a combination of SolidJS (Frontend) and Tauri/Rust (Backend) with a custom SQLite encryption driver (SQLCipher). To ensure cross-platform reproducibility, we strictly manage all developer dependencies using [`mise`](https://mise.jdx.dev/).
 
 ## 1. Prerequisites
 
@@ -56,7 +56,7 @@ pnpm tauri dev # -- --target x86_64-pc-windows-msvc on Windows
 #### Frontend validation
 
 ```bash
-pnpm check      # Svelte type checking
+pnpm check      # type checking
 pnpm lint       # ESLint rules
 pnpm format     # Prettier formatting
 ```
