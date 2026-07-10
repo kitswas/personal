@@ -23,7 +23,8 @@ Respect the Tauri paradigm.
 
 - **Frontend (`src/`):** Strictly for UI, state management, and user interaction. Written in TypeScript. Must not contain OS-level logic or hardcoded system paths.
 - **Backend (`src-tauri/`):** Strictly for system/OS access, file system operations, and heavy computation. Written in Rust.
-- **Communication:** Cross-boundary communication happens exclusively through Tauri IPC commands and events. Shared DTOs/types must be synchronized (preferably via generated bindings).
+- **Communication:** Cross-boundary communication happens exclusively through Tauri IPC commands and events. Shared DTOs/types must be synchronized.
+- **Typesafe IPC:** Do not reject Promises for domain logic. Tauri commands must return a structured Result/Either envelope (e.g., `IpcResponse<T, E>`) so domain errors are returned as values. Use `ts-rs` to generate strict TypeScript interfaces for all IPC payloads.
 
 ## 5. Total Correctness & Functional Patterns
 
@@ -43,12 +44,15 @@ Design for failure. Assume the user will force-quit the application or the machi
 ## 7. Zero-Defect Safety
 
 - **No Unhandled Exceptions:** Exhaustively handle all errors. In Rust, propagate errors via `Result` and exhaustively match `Option`. Do not leave `unwrap()` or `expect()` in production paths.
+- **Exhaustive Domain Errors:** Do not use `anyhow` or generic strings for errors returned to the UI. Define specific Rust `enum`s for all failure modes.
+- **Exhaustive UI Handling:** The frontend must use strict pattern matching (e.g., `ts-pattern` `.exhaustive()`) on all state transitions and IPC responses. TypeScript builds must fail if a Rust error variant is unhandled in the UI.
 - **No Undefined Behavior or Data Races:** Rely on Rust's borrow checker and type system. All library crates must carry `#![deny(unsafe_code)]`. Do not use `unsafe` blocks in application code under any circumstances.
 
 ## 8. Asynchronous UI State Visibility
 
 For every asynchronous operation, the UI must explicitly and accurately reflect the current execution state to the user. Do not silently fail or trap the user in a loading state.
 
+- **State Machines over Flags:** Never use independent boolean flags (`isLoading`, `isError`). Wrap asynchronous IPC calls in a declarative state machine primitive (e.g., `createIpcCommand`) using discriminated unions (`Idle | Loading | Success | Error`).
 - **Processing:** Always show a clear active state. Use definite progress indicators if the operation length is quantifiable or has checkpoints, or indefinite indicators (spinners) if unknown.
 - **Success:** Provide unambiguous visual confirmation when an operation completes successfully.
 - **Failure:** Catch all rejections and surface them gracefully to the UI. The user must be provided with a clear, actionable, and human-readable reason for the failure.
@@ -77,7 +81,7 @@ The developer experience must be completely frictionless. Ensure that build scri
 
 ## 13. Directory Map & Restricted Zones
 
-- `src/` — Frontend application code (React/Vue/Svelte, etc.).
+- `src/` — Frontend application code (Typescript).
 - `src-tauri/src/` — Rust backend code and IPC command handlers.
 - `e2e/` — Playwright end-to-end tests (run against the compiled binary via `tauri-driver`).
 - `docs/arch/` — Architecture Decision Records (ADRs).
