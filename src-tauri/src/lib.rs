@@ -8,8 +8,6 @@ pub mod models;
 
 use std::sync::{Arc, Mutex};
 
-use tauri::Manager;
-
 /// Shared application state injected into every Tauri command handler.
 pub struct AppState {
 	/// The encrypted SQLite connection.
@@ -34,7 +32,11 @@ pub fn run() {
 			commands::security::is_onboarding_done,
 			commands::security::unlock,
 			commands::security::setup_master_password,
-			commands::security::change_master_password
+			commands::security::change_master_password,
+			commands::transactions::list_transactions,
+			commands::transactions::commit_transaction,
+			commands::transactions::delete_transaction,
+			commands::transactions::get_running_balances
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
