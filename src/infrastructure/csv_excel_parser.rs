@@ -100,8 +100,8 @@ impl CsvExcelParser {
 					Data::Float(f) => f.to_string(),
 					Data::Int(i) => i.to_string(),
 					Data::Bool(b) => b.to_string(),
-					Data::DateTime(d) => d.to_string(), /* Keep as float-based string
-					                                      * for now */
+					Data::DateTime(d) => d.to_string(), /* Keep as float-based string */
+					// for now
 					Data::DateTimeIso(s) => s.clone(),
 					Data::DurationIso(s) => s.clone(),
 					Data::Error(e) => format!("Error: {:?}", e),
