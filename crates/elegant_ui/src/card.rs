@@ -1,4 +1,7 @@
-use crate::{button::ButtonUiExtensions, theme::ElegantTheme};
+use crate::{
+	button::ElegantButton,
+	theme::{ElegantTheme, Variant},
+};
 use egui;
 
 pub struct Card<'a> {
@@ -26,8 +29,8 @@ impl<'a> egui::Widget for Card<'a> {
 				ui.label(self.content);
 				ui.add_space(16.0);
 				ui.horizontal(|ui| {
-					ui.ghost_button("Cancel");
-					ui.primary_button("Save Changes");
+					ui.add(ElegantButton::new("Cancel").ghost());
+					ui.add(ElegantButton::new("Save Changes").variant(Variant::Primary));
 				});
 			})
 			.response

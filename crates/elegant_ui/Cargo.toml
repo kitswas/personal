@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 egui = "0.35"
+winreg = "0.56.0"

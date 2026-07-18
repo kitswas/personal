@@ -1,4 +1,30 @@
-use egui::{Color32, Context, CornerRadius, Id, Margin, Stroke, Visuals};
+use egui::{
+	Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, Id, Margin,
+	Stroke, Visuals,
+};
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ThemeMode {
+	Light,
+	Dark,
+	System,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Variant {
+	Primary,
+	Secondary,
+	Success,
+	Warning,
+	Danger,
+	Info,
+}
+
+impl Default for Variant {
+	fn default() -> Self {
+		Self::Primary
+	}
+}
 
 #[derive(Clone, Debug)]
 pub struct ElegantTheme {
@@ -8,39 +34,95 @@ pub struct ElegantTheme {
 	pub foreground: Color32,
 	pub border: Color32,
 	pub success: Color32,
-}
-
-impl Default for ElegantTheme {
-	fn default() -> Self {
-		Self {
-			primary: Color32::from_rgb(87, 71, 71),
-			secondary: Color32::from_rgb(244, 244, 245),
-			background: Color32::from_rgb(255, 255, 255),
-			foreground: Color32::from_rgb(9, 9, 11),
-			border: Color32::from_rgb(212, 212, 216),
-			success: Color32::from_rgb(0, 128, 50),
-		}
-	}
+	pub warning: Color32,
+	pub danger: Color32,
+	pub info: Color32,
+	pub is_dark: bool,
 }
 
 impl ElegantTheme {
-	pub fn mocha() -> Self {
-		Self {
-			primary: Color32::from_rgb(203, 166, 247),
-			secondary: Color32::from_rgb(49, 50, 68),
-			background: Color32::from_rgb(30, 30, 46),
-			foreground: Color32::from_rgb(205, 214, 244),
-			border: Color32::from_rgb(88, 91, 112),
-			success: Color32::from_rgb(166, 227, 161),
+	pub fn get_color(&self, variant: Variant) -> Color32 {
+		match variant {
+			Variant::Primary => self.primary,
+			Variant::Secondary => self.secondary,
+			Variant::Success => self.success,
+			Variant::Warning => self.warning,
+			Variant::Danger => self.danger,
+			Variant::Info => self.info,
+		}
+	}
+
+	pub fn build(mode: ThemeMode) -> Self {
+		let is_dark = match mode {
+			ThemeMode::Dark => true,
+			ThemeMode::Light => false,
+			ThemeMode::System => is_system_dark_mode(),
+		};
+
+		let primary = get_os_accent_color().unwrap_or_else(|| {
+			if is_dark {
+				Color32::from_rgb(203, 166, 247)
+			} else {
+				Color32::from_rgb(87, 71, 71)
+			}
+		});
+
+		if is_dark {
+			Self {
+				primary,
+				secondary: Color32::from_rgb(49, 50, 68),
+				background: Color32::from_rgb(30, 30, 46),
+				foreground: Color32::from_rgb(205, 214, 244),
+				border: Color32::from_rgb(88, 91, 112),
+				success: Color32::from_rgb(166, 227, 161),
+				warning: Color32::from_rgb(249, 226, 175),
+				danger: Color32::from_rgb(243, 139, 168),
+				info: Color32::from_rgb(137, 180, 250),
+				is_dark: true,
+			}
+		} else {
+			Self {
+				primary,
+				secondary: Color32::from_rgb(244, 244, 245),
+				background: Color32::from_rgb(255, 255, 255),
+				foreground: Color32::from_rgb(9, 9, 11),
+				border: Color32::from_rgb(212, 212, 216),
+				success: Color32::from_rgb(0, 128, 50),
+				warning: Color32::from_rgb(204, 153, 0),
+				danger: Color32::from_rgb(204, 0, 0),
+				info: Color32::from_rgb(0, 102, 204),
+				is_dark: false,
+			}
 		}
 	}
 
 	pub fn apply(&self, ctx: &Context) {
-		// Store theme in egui memory for components to read
 		ctx.data_mut(|d| d.insert_temp(Id::new("elegant_theme"), self.clone()));
 
-		// Update egui's default visuals
-		let mut style = (*ctx.style_of(egui::Theme::Light)).clone();
+		let font_bytes = include_bytes!("../assets/monaspace.ttf");
+		let mut fonts = FontDefinitions::default();
+		fonts.font_data.insert(
+			"elegant_font".to_owned(),
+			std::sync::Arc::new(FontData::from_static(font_bytes)),
+		);
+		fonts
+			.families
+			.entry(FontFamily::Proportional)
+			.or_default()
+			.insert(0, "elegant_font".to_owned());
+		fonts
+			.families
+			.entry(FontFamily::Monospace)
+			.or_default()
+			.insert(0, "elegant_font".to_owned());
+		ctx.set_fonts(fonts);
+
+		let mut style = (*ctx.style_of(if self.is_dark {
+			egui::Theme::Dark
+		} else {
+			egui::Theme::Light
+		}))
+		.clone();
 
 		style.spacing.item_spacing = egui::vec2(16.0, 16.0);
 		style.spacing.button_padding = egui::vec2(16.0, 8.0);
@@ -53,10 +135,10 @@ impl ElegantTheme {
 		style.visuals.widgets.hovered.corner_radius = radius;
 		style.visuals.widgets.active.corner_radius = radius;
 
-		let mut visuals = if self.background.r() > 128 {
-			Visuals::light()
-		} else {
+		let mut visuals = if self.is_dark {
 			Visuals::dark()
+		} else {
+			Visuals::light()
 		};
 		visuals.window_fill = self.background;
 		visuals.panel_fill = self.background;
@@ -79,19 +161,64 @@ impl ElegantTheme {
 
 		style.visuals = visuals;
 
-		if self.background.r() > 128 {
-			ctx.options_mut(|o| o.theme_preference = egui::ThemePreference::Light);
-			ctx.set_style_of(egui::Theme::Light, style);
+		let target_theme = if self.is_dark {
+			egui::Theme::Dark
 		} else {
-			ctx.options_mut(|o| o.theme_preference = egui::ThemePreference::Dark);
-			ctx.set_style_of(egui::Theme::Dark, style);
-		}
+			egui::Theme::Light
+		};
+		ctx.options_mut(|o| {
+			o.theme_preference = if self.is_dark {
+				egui::ThemePreference::Dark
+			} else {
+				egui::ThemePreference::Light
+			}
+		});
+		ctx.set_style_of(target_theme, style);
 	}
 
 	pub fn get(ctx: &Context) -> Self {
 		ctx.data_mut(|d| {
 			d.get_temp(Id::new("elegant_theme"))
-				.unwrap_or_else(|| ElegantTheme::default())
+				.unwrap_or_else(|| ElegantTheme::build(ThemeMode::Light))
 		})
 	}
+}
+
+#[cfg(target_os = "windows")]
+fn is_system_dark_mode() -> bool {
+	use winreg::{RegKey, enums::*};
+	let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+	if let Ok(personalize) = hkcu
+		.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize")
+	{
+		if let Ok(use_light) = personalize.get_value::<u32, _>("AppsUseLightTheme") {
+			return use_light == 0;
+		}
+	}
+	false
+}
+
+#[cfg(not(target_os = "windows"))]
+fn is_system_dark_mode() -> bool {
+	false
+}
+
+#[cfg(target_os = "windows")]
+fn get_os_accent_color() -> Option<Color32> {
+	use winreg::{RegKey, enums::*};
+	let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+	if let Ok(dwm) = hkcu.open_subkey("Software\\Microsoft\\Windows\\DWM") {
+		if let Ok(color_val) = dwm.get_value::<u32, _>("ColorizationColor") {
+			let r = ((color_val >> 16) & 0xFF) as u8;
+			let g = ((color_val >> 8) & 0xFF) as u8;
+			let b = (color_val & 0xFF) as u8;
+			return Some(Color32::from_rgb(r, g, b));
+		}
+	}
+	None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_os_accent_color() -> Option<Color32> {
+	None
 }

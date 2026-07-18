@@ -9,9 +9,9 @@ pub mod theme;
 
 pub use alert::Alert;
 pub use avatar::Avatar;
-pub use badge::BadgeUiExtensions;
-pub use button::ButtonUiExtensions;
+pub use badge::ElegantBadge;
+pub use button::ElegantButton;
 pub use card::Card;
 pub use inputs::InputUiExtensions;
 pub use progress::Progress;
-pub use theme::ElegantTheme;
+pub use theme::{ElegantTheme, ThemeMode, Variant};

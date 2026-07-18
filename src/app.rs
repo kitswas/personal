@@ -19,7 +19,7 @@ pub struct FinanceApp {
 impl FinanceApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
 		let (tx, rx) = unbounded();
-		let theme = ElegantTheme::default(); // Change to mocha() for dark theme
+		let theme = ElegantTheme::build(ThemeMode::System); // Reads OS dark/light mode and accent color
 		theme.apply(&cc.egui_ctx);
 		Self {
 			state: AppState {
@@ -45,14 +45,30 @@ impl eframe::App for FinanceApp {
 					egui::Grid::new("showcase_grid")
 						.spacing(egui::vec2(40.0, 40.0))
 						.show(ui, |ui| {
-							// ROW 1
+							// ROW 1: Buttons
 							ui.vertical(|ui| {
 								ui.label(egui::RichText::new("Buttons").strong());
 								ui.add_space(8.0);
 								ui.horizontal(|ui| {
-									let _ = ui.button("Default");
-									let _ = ui.primary_button("Primary");
-									let _ = ui.ghost_button("Ghost");
+									ui.add(
+										ElegantButton::new("Primary")
+											.variant(Variant::Primary),
+									);
+									ui.add(
+										ElegantButton::new("Secondary")
+											.variant(Variant::Secondary),
+									);
+									ui.add(
+										ElegantButton::new("Danger")
+											.variant(Variant::Danger),
+									);
+									ui.add(ElegantButton::new("Outline").outline());
+									ui.add(
+										ElegantButton::new("Danger Outline")
+											.variant(Variant::Danger)
+											.outline(),
+									);
+									ui.add(ElegantButton::new("Ghost").ghost());
 								});
 							});
 
@@ -62,15 +78,67 @@ impl eframe::App for FinanceApp {
 								);
 								ui.add_space(8.0);
 								ui.horizontal(|ui| {
-									let _ = ui.badge("Neutral");
-									let _ = ui.badge_success("Success");
-									ui.add_space(8.0);
+									ui.add(ElegantBadge::new("Default"));
+									ui.add(
+										ElegantBadge::new("Secondary")
+											.variant(Variant::Secondary),
+									);
+									ui.add(ElegantBadge::new("Outline").outline());
+									ui.add(
+										ElegantBadge::new("Success")
+											.variant(Variant::Success),
+									);
+									ui.add(
+										ElegantBadge::new("Warning")
+											.variant(Variant::Warning),
+									);
+									ui.add(
+										ElegantBadge::new("Danger")
+											.variant(Variant::Danger),
+									);
+									ui.add_space(16.0);
 									ui.add(Avatar::new("JD"));
 								});
 							});
 							ui.end_row();
 
-							// ROW 2
+							// ROW 2: Alerts
+							ui.vertical(|ui| {
+								ui.label(egui::RichText::new("Alerts").strong());
+								ui.add_space(8.0);
+								ui.add(
+									Alert::new(
+										"Success!",
+										"Your changes have been saved.",
+									)
+									.variant(Variant::Success),
+								);
+
+								ui.add_space(8.0);
+								ui.add(
+									Alert::new(
+										"Warning!",
+										"Please review before continuing.",
+									)
+									.variant(Variant::Warning),
+								);
+
+								ui.add_space(8.0);
+								ui.add(
+									Alert::new(
+										"Info",
+										"This is a default alert message.",
+									)
+									.variant(Variant::Info),
+								);
+
+								ui.add_space(8.0);
+								ui.add(
+									Alert::new("Error!", "Something went wrong.")
+										.variant(Variant::Danger),
+								);
+							});
+
 							ui.vertical(|ui| {
 								ui.label(egui::RichText::new("Cards").strong());
 								ui.add_space(8.0);
@@ -78,20 +146,8 @@ impl eframe::App for FinanceApp {
 									"Card Title",
 									"Card description goes here.",
 								));
-							});
 
-							ui.vertical(|ui| {
-								ui.label(egui::RichText::new("Alerts").strong());
-								ui.add_space(8.0);
-								ui.add(Alert::new(
-									"Info Alert",
-									"This is a default alert message explaining something important.",
-								));
-							});
-							ui.end_row();
-
-							// ROW 3
-							ui.vertical(|ui| {
+								ui.add_space(16.0);
 								ui.label(egui::RichText::new("Inputs").strong());
 								ui.add_space(8.0);
 								ui.set_width(300.0);
@@ -99,9 +155,8 @@ impl eframe::App for FinanceApp {
 									&mut self.state.sample_input,
 									"Enter text here...",
 								);
-							});
 
-							ui.vertical(|ui| {
+								ui.add_space(16.0);
 								ui.label(
 									egui::RichText::new("Progress & Spinners").strong(),
 								);
@@ -109,10 +164,8 @@ impl eframe::App for FinanceApp {
 								ui.set_width(300.0);
 								ui.add(Progress::new(0.65));
 								ui.add_space(8.0);
-								ui.add(
-									egui::Spinner::new()
-										.color(egui::Color32::from_rgb(87, 71, 71)),
-								);
+								let theme = ElegantTheme::get(ui.ctx());
+								ui.add(egui::Spinner::new().color(theme.primary));
 							});
 							ui.end_row();
 						});
