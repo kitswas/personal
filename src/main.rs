@@ -6,6 +6,7 @@
 //! accounting ledger.
 
 mod app;
+mod domain;
 
 use app::FinanceApp;
 

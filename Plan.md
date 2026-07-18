@@ -27,12 +27,9 @@ A local-first, crash-proof desktop application built with pure Rust and `egui` f
 
 This codebase enforces **total program correctness**: every branch must terminate and every reachable state must satisfy the program invariants.
 
-### Functional Programming Style
+### Test-Driven & API-Boundary First Architecture
 
-- **Rust backend:** Pure functions preferred; side effects (DB, keyring, FS) are isolated to Tokio background tasks.
-- **State Machine:** UI projection is entirely driven by an immutable reference to the `AppState`. All interactions yield `Message` variants that cleanly transition the state.
-- **No panics in library code.** `unwrap()` and `expect()` are banned outside of `main` bootstrap. All fallible paths return `Result<T, AppError>`.
-- **No `unsafe` blocks** except where required by the SQLCipher FFI (which is encapsulated inside `rusqlite` itself).
+The system is strictly layered. UI is decoupled from the core business logic. We define clear boundaries (Traits/Contracts) for the Storage, Parser, and Ledger layers, and test them rigorously before writing any UI code.
 
 ### Total Correctness Guarantees
 
@@ -47,40 +44,32 @@ This codebase enforces **total program correctness**: every branch must terminat
 
 ---
 
-## Architecture
+## Architecture (Layered Boundaries)
 
 ```
 +------------------------------------------------------------+
-|                     User''s Machine                        |
+|                     User's Machine                         |
 |                                                            |
 |  +------------------------------------------------------+  |
-|  |              Rust eframe Application                 |  |
+|  |              Rust Application Core                   |  |
 |  |                                                      |  |
-|  |  +-----------------------+  +---------------------+  |  |
-|  |  |   egui UI (app.rs)    |  |    State Machine    |  |  |
-|  |  |                       |  |    (state.rs)       |  |  |
-|  |  |  Read-only State Ref  |<-|  AppState           |  |  |
-|  |  |                       |  |                     |  |  |
-|  |  |  Events -> Message    |->|  apply_message()    |  |  |
-|  |  +-----------------------+  +----------+----------+  |  |
-|  |                                        | Command     |  |
-|  |                             +----------v----------+  |  |
-|  |                             |   Tokio Tasks       |  |  |
-|  |                             |   (DB, File I/O)    |  |  |
-|  |                             +----------+----------+  |  |
-|  |                                        |             |  |
-|  +----------------------------------------+-------------+  |
-|                                           |                |
-|  +----------------------+  +--------------v--------------+ |
-|  | OS Keystore          |  | data.db (SQLCipher AES-256) | |
-|  | (Master Key)         |->| $APP_DATA/Personal/         | |
-|  +----------------------+  +-----------------------------+ |
+|  |  [ domain::Parser ]  -> Reads CSV/XLSX safely        |  |
+|  |  [ domain::Ledger ]  -> Enforces double-entry rules  |  |
+|  |  [ domain::Storage ] -> Abstract DB operations       |  |
+|  |                                                      |  |
+|  +------------------------------------------------------+  |
+|                             |                              |
+|  +------------------------------------------------------+  |
+|  |              egui Desktop Frontend                   |  |
+|  |                                                      |  |
+|  |  Consumes domain interfaces for interaction          |  |
+|  +------------------------------------------------------+  |
 +------------------------------------------------------------+
 ```
 
 ---
 
-## Database Schema
+## Database Schema (Storage Layer)
 
 ```sql
 -- Currency stored as integers (paise for INR). Floating-point forbidden.
@@ -125,17 +114,22 @@ CREATE INDEX idx_txn_date         ON transactions(date);
 
 ## Phases
 
-### Phase 1 — Foundation
+### Phase 1 — API Boundaries & Contracts (Current)
 
-**Goal:** Compilable eframe app.
+**Goal:** Define the interface traits and data structures (models) for `Storage`, `Parser`, and `Ledger`.
 
-#### `Cargo.toml` — crates to add
+### Phase 2 — Storage Implementation & Testing
 
-```toml
-[dependencies]
-eframe = "0.35"
-egui = "0.35"
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1", features = ["derive"] }
-crossbeam-channel = "0.5"
-```
+**Goal:** Implement the encrypted SQLite storage backend and verify it heavily with automated tests.
+
+### Phase 3 — Parser Implementation & Testing
+
+**Goal:** Implement the zero-trust data pipeline and test it with mock CSV/Excel inputs.
+
+### Phase 4 — Core Ledger Implementation
+
+**Goal:** Wire the storage and parser together, enforcing all business logic and double-entry rules.
+
+### Phase 5 — UI Construction
+
+**Goal:** Hook the heavily tested backend to the `eframe`/`egui` frontend. Ensure premium aesthetic (no generic grey/black themes) and performant immediate mode rendering.
