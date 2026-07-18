@@ -1,6 +1,6 @@
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use eframe::egui;
-use crate::ui::*;
+use elegant_ui::*;
 
 pub enum Message {
 	Noop,
@@ -19,11 +19,14 @@ pub struct FinanceApp {
 impl FinanceApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
 		let (tx, rx) = unbounded();
-		apply_theme(&cc.egui_ctx);
-		Self { 
-			state: AppState { sample_input: String::new() }, 
-			tx, 
-			rx 
+		let theme = ElegantTheme::default(); // Change to mocha() for dark theme
+		theme.apply(&cc.egui_ctx);
+		Self {
+			state: AppState {
+				sample_input: String::new(),
+			},
+			tx,
+			rx,
 		}
 	}
 }
@@ -54,7 +57,9 @@ impl eframe::App for FinanceApp {
 							});
 
 							ui.vertical(|ui| {
-								ui.label(egui::RichText::new("Badges & Avatars").strong());
+								ui.label(
+									egui::RichText::new("Badges & Avatars").strong(),
+								);
 								ui.add_space(8.0);
 								ui.horizontal(|ui| {
 									let _ = ui.badge("Neutral");
@@ -90,16 +95,24 @@ impl eframe::App for FinanceApp {
 								ui.label(egui::RichText::new("Inputs").strong());
 								ui.add_space(8.0);
 								ui.set_width(300.0);
-								ui.text_input(&mut self.state.sample_input, "Enter text here...");
+								ui.text_input(
+									&mut self.state.sample_input,
+									"Enter text here...",
+								);
 							});
 
 							ui.vertical(|ui| {
-								ui.label(egui::RichText::new("Progress & Spinners").strong());
+								ui.label(
+									egui::RichText::new("Progress & Spinners").strong(),
+								);
 								ui.add_space(8.0);
 								ui.set_width(300.0);
 								ui.add(Progress::new(0.65));
 								ui.add_space(8.0);
-								ui.add(egui::Spinner::new().color(egui::Color32::from_rgb(87, 71, 71)));
+								ui.add(
+									egui::Spinner::new()
+										.color(egui::Color32::from_rgb(87, 71, 71)),
+								);
 							});
 							ui.end_row();
 						});
