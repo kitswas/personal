@@ -1,9 +1,10 @@
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use eframe::egui;
 use elegant_ui::*;
+use std::time::Duration;
 
 pub enum Message {
-	Noop,
+	ThemeChanged(bool),
 }
 
 pub struct AppState {
@@ -14,26 +15,59 @@ pub struct FinanceApp {
 	state: AppState,
 	tx: Sender<Message>,
 	rx: Receiver<Message>,
+	theme_mode: ThemeMode,
+	is_dark: bool,
 }
 
 impl FinanceApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
 		let (tx, rx) = unbounded();
-		let theme = ElegantTheme::build(ThemeMode::System, MonaspaceFont::Neon); // Reads OS dark/light mode and accent color
+		let theme_mode = ThemeMode::System;
+		let theme = ElegantTheme::build(theme_mode, MonaspaceFont::Neon);
+		let is_dark = theme.is_dark;
 		theme.apply(&cc.egui_ctx);
+
+		let tx_clone = tx.clone();
+		let ctx_clone = cc.egui_ctx.clone();
+		std::thread::spawn(move || {
+			let mut last_is_dark = is_dark;
+			loop {
+				std::thread::sleep(Duration::from_secs(1));
+				let current_is_dark = is_system_dark_mode();
+				if current_is_dark != last_is_dark {
+					last_is_dark = current_is_dark;
+					let _ = tx_clone.send(Message::ThemeChanged(current_is_dark));
+					ctx_clone.request_repaint();
+				}
+			}
+		});
+
 		Self {
 			state: AppState {
 				sample_input: String::new(),
 			},
 			tx,
 			rx,
+			theme_mode,
+			is_dark,
 		}
 	}
 }
 
 impl eframe::App for FinanceApp {
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-		while let Ok(_msg) = self.rx.try_recv() {}
+		while let Ok(msg) = self.rx.try_recv() {
+			match msg {
+				Message::ThemeChanged(is_dark) => {
+					if self.theme_mode == ThemeMode::System {
+						self.is_dark = is_dark;
+						let theme =
+							ElegantTheme::build(ThemeMode::System, MonaspaceFont::Neon);
+						theme.apply(ui.ctx());
+					}
+				},
+			}
+		}
 
 		egui::CentralPanel::default().show(ui, |ui| {
 			ui.vertical_centered(|ui| {

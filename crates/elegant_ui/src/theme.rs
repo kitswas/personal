@@ -291,23 +291,8 @@ impl ElegantTheme {
 	}
 }
 
-#[cfg(target_os = "windows")]
-fn is_system_dark_mode() -> bool {
-	use winreg::{RegKey, enums::*};
-	let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-	if let Ok(personalize) = hkcu
-		.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize")
-	{
-		if let Ok(use_light) = personalize.get_value::<u32, _>("AppsUseLightTheme") {
-			return use_light == 0;
-		}
-	}
-	false
-}
-
-#[cfg(not(target_os = "windows"))]
-fn is_system_dark_mode() -> bool {
-	false
+pub fn is_system_dark_mode() -> bool {
+	matches!(dark_light::detect(), Ok(dark_light::Mode::Dark))
 }
 
 #[cfg(target_os = "windows")]

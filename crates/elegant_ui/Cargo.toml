@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+dark-light = "2.0.0"
 egui = "0.35"
 winreg = "0.56.0"
