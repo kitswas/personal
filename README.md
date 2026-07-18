@@ -1,20 +1,24 @@
-# Tauri + SolidJS + TypeScript
+# Local-First Personal Finance App
 
-This template should help get you started developing with Tauri, SolidJS and TypeScript in Vite.
+A local-first, crash-proof desktop application built with pure Rust and `egui` for robust double-entry accounting. Targets non-US/EU users by prioritizing fault-tolerant Excel/CSV import over API scraping. All financial data is encrypted at rest.
 
 ## Recommended IDE Setup
 
-[VS Code](https://code.visualstudio.com/) + [SolidJS](https://marketplace.visualstudio.com/items?itemName=solid.tsx-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+[VS Code](https://code.visualstudio.com/) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
 
 ## Commands
 
-To get started run:
-cd Personal
-pnpm install
-pnpm tauri android init
+To get started, run:
+```bash
+cargo build
+```
 
 For Desktop development, run:
-pnpm tauri dev
+```bash
+cargo run
+```
 
-For Android development, run:
-pnpm tauri android dev
+To run tests:
+```bash
+cargo test
+```

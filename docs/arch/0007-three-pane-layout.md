@@ -41,44 +41,23 @@ whitespace.
 ```
 
 All three information types are visible simultaneously on wide screens. This
-matches the interaction model of desktop-native finance apps (GnuCash, Ledger
-Live, Banktivity) and email clients (Outlook, Thunderbird) where list +
-detail side-by-side is the established convention for record-oriented data.
+matches the interaction model of desktop-native finance apps.
 
 ## Decision
 
-Use a **three-pane layout** with proportions approximately **30 / 40 / 30**,
-implemented with CSS Grid using fluid fractions (`fr`) — no hardcoded pixel
-widths anywhere.
+Use a **three-pane layout** implemented with `egui`'s native layout panels:
 
-```css
-/* Wide: all 3 panes */
-.shell {
-	display: grid;
-	grid-template-columns: var(--col-nav) var(--col-list) var(--col-detail);
-	grid-template-areas: "nav list detail";
-	height: 100vh;
-}
-```
+- **Left Nav:** `egui::SidePanel::left("nav_panel").exact_width(width * 0.3)`
+- **Right Detail:** `egui::SidePanel::right("detail_panel").exact_width(width * 0.3)`
+- **Center List:** `egui::CentralPanel::default()` (automatically fills the remaining ~40% space).
 
 ### Responsive collapse strategy
 
-The layout collapses progressively via CSS media queries and a SolidJS
-`createMemo` `layoutMode` — no JavaScript resize observers needed.
+The layout collapses progressively by checking `ui.available_width()` dynamically during the render loop.
 
-| Viewport            | Columns                               | Detail pane                                                                            |
-| ------------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
-| Wide `> 1024px`     | nav (3fr) + list (4fr) + detail (3fr) | Always visible                                                                         |
-| Medium `640–1024px` | nav (30%) + list (70%)                | Hidden by default; slides in as an overlay on item selection (CSS transform + opacity) |
-| Narrow `< 640px`    | Single column (100vw)                 | Becomes a pushed view via SvelteKit page transition; bottom tab bar replaces nav pane  |
-
-### Pane responsibilities
-
-| Pane               | Content                                                                                                                                                               |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Nav (left)**     | App name + tagline header; nav links with active route indicator; account tree with live balance per account                                                          |
-| **List (center)**  | Transaction ledger / import triage / account rows — the primary scrollable list for the current route                                                                 |
-| **Detail (right)** | Context panel driven by center selection: transaction postings, account summary card, quick-add transaction form; shows a neutral hint state when nothing is selected |
+- Wide `> 1024px`: Render all three panels.
+- Medium `640–1024px`: Render Nav and Central, but render the Detail panel as an `egui::Window` (floating modal) or collapse the Nav pane.
+- Narrow `< 640px`: Render a single Central pane with a top/bottom navigation bar.
 
 ### Empty state of the detail pane
 
@@ -88,26 +67,9 @@ The detail pane is **never blank**. When nothing is selected:
 - On the Import route: shows template documentation for the selected template
 - On the Accounts route: shows net-worth summary
 
-This prevents the jarring "grey void" common in 3-pane apps when first loading.
-
 ## Consequences
 
-- **Good:** Maximum information density on wide desktop screens — matches the
-  target use case (desktop-first Tauri app).
-- **Good:** Implemented entirely in CSS Grid with `fr` units. No JS for layout
-  — the layout is intrinsic and cannot get out of sync with state.
-- **Good:** Progressive collapse to 2-pane and then 1-pane satisfies the
-  blueprint's mobile-first fluid requirement without a separate mobile codebase.
-- **Good:** The detail pane doubles as a quick-action surface (quick-add form),
-  reducing modal usage.
-- **Trade-off:** The right detail pane adds a `createMemo` context store
-  (`selectedItem`) that must be kept in sync with navigation. This is the
-  one piece of shared cross-pane state; it lives in `src/lib/stores/selection.ts`
-  and is the single source of truth (per ADR 0001's no-duplication rule).
-- **Trade-off:** On medium viewports, the detail pane is an overlay. The slide
-  animation must be implemented with CSS `transform`/`opacity` transitions only
-  (no JS animation libraries) to keep bundle size minimal.
-- **Constraint:** Hardcoded pixel dimensions for the grid columns are forbidden.
-  All layout sizing uses `fr`, `%`, `vw`, or `vh`. This is enforced by the
-  linter (a custom ESLint rule or `stylelint` rule can flag `px` in
-  `grid-template-columns`).
+- **Good:** Maximum information density on wide desktop screens.
+- **Good:** Implemented entirely in Rust via pure `egui` immediate mode layout logic, avoiding CSS and DOM completely.
+- **Good:** The right pane acts as a contextual action surface, reducing popup dialogs.
+- **Trade-off:** `egui` panels must be requested in a specific order (SidePanels before CentralPanel) to allocate space correctly.

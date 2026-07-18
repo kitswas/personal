@@ -4,47 +4,19 @@
 
 ## 1. ARCHITECTURE & TECH STACK
 
-This application relies on a strict separation of concerns. The Rust backend acts as an "iron-clad sandbox" that absorbs malformed data and protects the encrypted SQLite database, while the frontend provides a high-density, fluid native-feeling UI.
+This application relies on a strict separation of concerns. The pure Rust stack acts as an "iron-clad sandbox" that absorbs malformed data and protects the encrypted SQLite database, while the `egui` frontend provides a high-density, fluid native UI.
 
-- **Runtime:** Tauri (v2) - Tiny footprint, cross-platform (Desktop + future iOS/Android mobile targets).
-
-- **Backend:** Rust
-
+- **Runtime:** Native Rust Executable
+- **Frontend Framework:** `egui` (Immediate Mode GUI)
 - **Database:** SQLite (embedded, local, row-based OLTP) encrypted via `sqlcipher`.
+- **Package Manager:** `cargo`
+- **Key Rust Crates:** `eframe`, `tokio`, `calamine` (Excel), `csv`, `sqlx` (Compile-time SQL), `serde`, `regex`, `keyring` (OS Keystore), `sqlcipher`.
 
-- **Frontend Package Manager:** `pnpm` (Strictly Enforced).
+### 1.1 Frontend Architecture
 
-- **Styling & Components:** Oat.ink (<https://oat.ink/components/>) - Minimal, accessible components. Plain CSS utilizing fluid/relative units (No Tailwind).
-
-- **Layout/Text Reflow:** `pretext` (<https://github.com/chenglou/pretext>) to guarantee precise typographic reflowing across varying screen sizes.
-
-- **Key Rust Crates:** `calamine` (Excel), `csv`, `sqlx` (Compile-time SQL), `serde`, `regex`, `keyring` (OS Keystore), `sqlcipher`.
-
-### 1.1 Frontend Architectural Paths (Choose One)
-
-The backend API contract (Tauri IPC) is identical for both paths.
-
-- **Path A: The Reactive Path (SolidJS)**
-
-  - **Framework:** SolidJS + TypeScript
-
-  - **Data Visualization:** Unovis
-
-  - **Pros:** SolidJS handles the complex UI state changes in the Triage grid automatically.
-
-- **Path B: The Minimalist Path (Vanilla TS + Micro-libs)**
-
-  - **Framework:** Vanilla TypeScript + HTML
-
-  - **Routing:** `tinyrouter.js` (\~950b)
-
-  - **Data Visualization:** Apache ECharts or uPlot
-
-  - **Oat Extensions:** `oat-upload`, `oat-table`, `oat-chips`, `oat-animate`.
-
-  - **Zero-Dep Utilities:** `floatype.js`, `highlighted-input.js`, `dragmove.js`.
-
-  - **Pros:** Zero framework overhead, absolute smallest binary size.
+- **State:** Deterministic, unidirectional state machine.
+- **Rendering:** `egui` immediate mode drawing loops purely projected from immutable state.
+- **Side Effects:** Asynchronous tasks run on `tokio` and resolve to state `Message` updates.
 
 ### 1.2 System Architecture Diagram
 
@@ -55,14 +27,14 @@ graph TD
             Key[Master Encryption Key]
         end
 
-        subgraph TauriApp [Tauri Cross-Platform Application]
-            subgraph Frontend [Frontend: SolidJS OR Vanilla TS]
-                UI[UI: Fluid Oat.ink + Pretext]
-                Charts[Analytics Viz]
+        subgraph RustApp [Rust Desktop Application]
+            subgraph Frontend [egui Frontend]
+                UI[UI Components & Layout]
+                Charts[Native Data Viz]
             end
 
-            subgraph Backend [Backend: Rust Core]
-                IPC[Tauri IPC Command Handler]
+            subgraph Backend [Rust Core]
+                State[State Machine: apply_message]
                 Parser[Data Parser: calamine / csv]
                 Rules[Rules & Template Engine]
                 DB_Enforcer[sqlx DB Manager & Math Enforcer]
@@ -75,16 +47,17 @@ graph TD
 
     Key -.->|Unlock on Boot| DB_Enforcer
     XLS -.->|User drops file| UI
-    UI -->|"parse_statement()"| IPC
-    IPC --> Parser
+    UI -->|"Message::ParseStatement"| State
+    State -->|Command::Parse| Parser
     Parser --> Rules
-    Rules -->|"Returns Vec<ParsedRow>"| UI
-    UI -.->|User fixes Red Rows| UI
-    UI -->|"commit_transaction()"| IPC
-    IPC --> DB_Enforcer
+    Rules -->|"Returns Message::ParsedRow"| State
+    State -.->|User fixes Red Rows| UI
+    UI -->|"Message::CommitTransaction"| State
+    State -->|Command::Commit| DB_Enforcer
     DB_Enforcer -->|Atomic Encrypted Commit| DB
     DB -.->|Window Functions| DB_Enforcer
-    DB_Enforcer -->|"get_running_balances()"| UI
+    DB_Enforcer -->|"Message::RunningBalances"| State
+    State --> UI
     UI --> Charts
 
 ```
@@ -94,9 +67,8 @@ graph TD
 The application adheres to a Zero-Trust and Defense-in-Depth model, assuming all ingested files and local environments could be compromised.
 
 - **Encryption at Rest:** The SQLite database is strictly encrypted using AES-256 via `sqlcipher`. Financial data is never stored in plaintext on the disk.
-- **Native Key Management:** The master password/encryption key is NEVER stored in a config file or `localStorage`. Rust securely interfaces with the OS-level credential manager (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux, Keystore on Android) using the `keyring` crate.
+- **Native Key Management:** The master password/encryption key is NEVER stored in a config file. Rust securely interfaces with the OS-level credential manager (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux) using the `keyring` crate.
 - **Zero-Trust Parsing:** Bank statements (Excel/CSV) are treated as hostile input. Parsers must fail safely, preventing memory leaks, buffer overflows, or injection attacks during data triage.
-- **Data in Motion:** All IPC communication happens entirely locally within the Tauri memory space. If future network plugins are added, TLS 1.3 is strictly mandated.
 
 ## 3. DATABASE SCHEMA & RULES (Pure SQLite)
 
@@ -142,56 +114,6 @@ CREATE INDEX idx_transactions_date ON transactions(date);
 
 Rust evaluates TOML templates to extract data. TOML is explicitly chosen over JSON to eliminate "Regex escape hell" by utilizing literal strings (`'...'`), supporting inline comments, and making multi-leg postings highly readable via arrays of tables (`[[...]]`).
 
-#### Example: Form 26AS (TDS) Template
-
-```toml
-template_name = "Form 26AS TDS"
-schema_alignment = "sahamati_tax_v1"
-
-[date]
-column = "Date of Transaction"
-format = "%d/%m/%Y"
-
-[payee]
-column = "Deductor Name"
-
-[notes]
-type = "composite"
-format = "TDS Section {section} | TAN: {tan}"
-
-[notes.fields]
-section = "Section"
-tan = "TAN of Deductor"
-
-# Example showing TOML's superpower: Literal Strings for Regex
-[[extractors]]
-description = "Extract Payee from complex UPI strings"
-source_column = "Details"
-# Using single quotes means \d and \s don't need to be escaped like in JSON!
-regex = 'UPI/(?:DR|CR)/\d+/([^/]+)'
-target_field = "payee"
-
-# Multi-leg postings as an array of tables
-[[postings_rules.legs]]
-description = "Gross Income"
-amount_column = "Amount Paid/Credited"
-direction = "credit"
-default_account = "Income:Salary"
-
-[[postings_rules.legs]]
-description = "Tax Deducted"
-amount_column = "Tax Deducted"
-direction = "debit"
-default_account = "Asset:Taxes:TDS_Receivable"
-
-[[postings_rules.legs]]
-description = "Net Cash to Bank"
-amount_column = "auto_balance"
-direction = "debit"
-default_account = "Asset:Checking"
-
-```
-
 ### 4.2 Auto-Categorization
 
 1. **Explicit Rules:** Processed via Regex (mapped in TOML).
@@ -199,12 +121,10 @@ default_account = "Asset:Checking"
 
 ### 4.3 The Data Contract (`ParsedRow`)
 
-Rust maps every row to this Enum and sends it via Tauri IPC. It never panics on bad data.
+Rust maps every row to this Enum and state mutations. It never panics on bad data.
 
 ```rust
-#[derive(Debug, Serialize, Deserialize, Clone, TS)]
-#[serde(tag = "status", rename_all = "camelCase")]
-#[ts(export)]
+#[derive(Debug, Clone)]
 pub enum ParsedRow {
     Valid {
         row_idx: usize,
@@ -224,30 +144,23 @@ pub enum ParsedRow {
 
 ```
 
-## 5. UI/UX SPECIFICATION (Fluid & Mobile-Ready)
+## 5. UI/UX SPECIFICATION (egui Desktop Native)
 
-The UI must be entirely fluid. Hardcoded pixel dimensions are forbidden to ensure a seamless transition to Tauri's mobile targets (iOS/Android).
+The UI must be entirely fluid and responsive, rendered via `egui` panels and layouts.
 
-- **Global Layout:** Uses percentages (`%`), fractions (`fr`), and viewport units (`vw`/`vh`).
-- **Sidebar:** Reflows from a fractional side-panel on desktop to a hidden/bottom-tab navigation on smaller mobile viewports.
-- **Typography & Content Scaling:** Managed via `pretext` to ensure text scales and wraps predictably across devices without breaking oat.ink components.
-- **Triage Data Grid:** UI renders `Vec<ParsedRow>` using `oat-table`. Invalid rows are highlighted for human-in-the-loop correction.
+- **Global Layout:** Uses `egui::CentralPanel` and side panels for dynamic resizing.
+- **Triage Data Grid:** UI renders `Vec<ParsedRow>` using `egui_extras::TableBuilder`. Invalid rows are highlighted for human-in-the-loop correction.
 
 ## 6. REJECTED ARCHITECTURES & REFERENCES
 
 To maintain the project's focus, the following technologies were explicitly evaluated and rejected:
 
-- **Tailwind CSS & Fixed Pixels:** Stripped out in favor of the minimalistic `oat.ink` component library and fluid/percentage-based layouts.
-- **npm/yarn/bun:** Disallowed. Only `pnpm` is permitted.
+- **Tauri & Web Frameworks (SolidJS/React):** Initially considered but replaced to achieve the absolute smallest binary footprint and fastest native UI via pure Rust and `egui`.
+- **npm/yarn/pnpm:** Disallowed. Only `cargo` is permitted.
 - **TigerBeetle & hledger:** Dual-database sync architectures cause fragile race conditions. Rejected for pure local SQLite.
 - **Account Aggregator APIs & ML Models:** Cloud dependencies and binary bloat rejected in favor of local parsing and statistics.
 
 ### Links & Context
 
-- **Oat.ink Components & Extensions:** `https://oat.ink/components/`, `https://oat.ink/extensions/`
-- **Zero-Dep Libs:** `tinyrouter.js`, `floatype.js`, `highlighted-input.js`, `dragmove.js`
-- **Pretext:** `https://github.com/chenglou/pretext` (Typography/reflow handling).
-- **Paisa:** `https://github.com/ananthakumaran/paisa` (Inspiration for UI, lesson on text-to-SQL sync fragility).
 - **TigerBeetle:** `https://tigerbeetle.com/` (Inspiration for strict correctness).
-- **Unovis:** `https://unovis.dev/` (Grammar of graphics for Analytics).
 - **Sahamati Standards:** `https://github.com/Sahamati/account-aggregator-standards` (Source of truth for Indian financial schema mapping).

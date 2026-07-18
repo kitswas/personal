@@ -1,31 +1,13 @@
 # Building the Application
 
-This project uses a combination of SolidJS (Frontend) and Tauri/Rust (Backend) with a custom SQLite encryption driver (SQLCipher). To ensure cross-platform reproducibility, we strictly manage all developer dependencies using [`mise`](https://mise.jdx.dev/).
+This project uses a pure Rust stack with `egui` for the frontend and a custom SQLite encryption driver (SQLCipher) for the backend database.
 
 ## 1. Prerequisites
 
 Before you begin, ensure you have the following installed on your system:
 
 - **Git**
-- **mise** (The dev tool manager). See [installation instructions](https://mise.jdx.dev/getting-started.html).
-
-You do **NOT** need to install Node.js, pnpm, or Rust globally. `mise` will manage the exact required versions for this project.
-
-## 2. Environment Setup
-
-Clone the repository and install the required tools using `mise`:
-
-```bash
-git clone https://github.com/kitswas/personal.git
-cd personal
-mise install
-```
-
-This command automatically downloads and configures:
-
-- **Node.js** (LTS)
-- **pnpm** (Latest)
-- **Rust** (stable)
+- **Rust** (stable, via rustup)
 
 ### System Requirements (SQLCipher / OpenSSL)
 
@@ -34,48 +16,37 @@ Because we use the `bundled-sqlcipher` driver for encrypted SQLite, you must hav
 - **Windows**: Install OpenSSL using `vcpkg install openssl:x64-windows`, `choco install openssl`, or any other preferred method.
 - **macOS / Linux**: Usually pre-installed or available via your package manager (e.g. `brew install openssl` or `apt install libssl-dev`).
 
-## 3. Installing Dependencies
+## 2. Environment Setup
 
-Once `mise install` completes, install the project's JavaScript dependencies:
+Clone the repository:
 
 ```bash
-pnpm install
-pnpm prepare # to set up git hooks
+git clone https://github.com/kitswas/personal.git
+cd personal
 ```
 
-## 4. Development Workflow
+## 3. Development Workflow
 
-To start the application in development mode (which spins up both the Vite frontend server and the Tauri backend watcher):
+To start the application in development mode:
 
 ```bash
-pnpm tauri dev # -- --target x86_64-pc-windows-msvc on Windows
+cargo run
 ```
 
 ### Validation Commands
 
-#### Frontend validation
-
 ```bash
-pnpm check      # type checking
-pnpm lint       # ESLint rules
-pnpm format     # Prettier formatting
-```
-
-#### Backend validation
-
-```bash
-cd src-tauri
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
-cargo test # --target x86_64-pc-windows-msvc on Windows
+cargo test
 ```
 
-## 5. Production Build
+## 4. Production Build
 
 To build a standalone production binary:
 
 ```bash
-pnpm tauri build
+cargo build --release
 ```
 
-The compiled binaries will be located in `src-tauri/target/release/`.
+The compiled binaries will be located in `target/release/`.

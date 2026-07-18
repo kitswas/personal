@@ -61,7 +61,7 @@ code execution surface — unacceptable under the zero-trust threat model.
 ## Decision
 
 Import templates are TOML files, parsed by the `toml` crate in Rust.
-They are bundled with the binary via `tauri::path::resource_dir` and can
+They are bundled with the binary via `include_bytes!` and can
 also be loaded from a user-specified directory.
 
 All regex patterns in templates are compiled with `regex::RegexBuilder`

@@ -1,71 +1,54 @@
-# ADR 0005 — Single `Arc<Mutex<Connection>>` over a Connection Pool
+# ADR 0005 — Dedicated Database Thread (Actor Pattern)
 
 - **Date:** 2026-07-08
 - **Status:** Accepted
+- **Note:** Updated from `Arc<Mutex>` to the Actor Pattern on 2026-07-18.
 
 ## Context
 
-`rusqlite` is a synchronous API wrapping the C SQLite library. Tauri 2 runs
-command handlers on Tokio's async thread pool. A connection management strategy
-is required.
+`rusqlite` is a synchronous API wrapping the C SQLite library. Since our application relies heavily on Tokio for asynchronous background tasks, we must manage how these concurrent tasks interact with the synchronous database connection safely.
 
 Options considered:
 
 | Strategy                                           | Concurrency                 | Complexity      | Risk                               |
 | -------------------------------------------------- | --------------------------- | --------------- | ---------------------------------- |
-| `r2d2` / `deadpool` connection pool                | Multiple concurrent readers | Medium          | Pool exhaustion; WAL reader limits |
-| `sqlx` async pool (not usable — see ADR 0001)      | High concurrency            | Low API surface | Incompatible with SQLCipher        |
-| Single `Arc<Mutex<Connection>>` + `spawn_blocking` | Serialised                  | Low             | None                               |
+| `r2d2` / `deadpool` connection pool                | Multiple concurrent readers | Medium          | Pool exhaustion; key management    |
+| Single `Arc<Mutex<Connection>>` + `spawn_blocking` | Serialized by Mutex         | Low             | Deadlocks; thread contention       |
+| **Dedicated DB Thread (Actor Pattern)**            | Serialized by Channel       | Medium          | None                               |
 
 **Why a pool is unnecessary here:**
 
-SQLite in WAL mode supports multiple concurrent _readers_ but only one
-concurrent _writer_. For a single-user desktop application, all meaningful
-operations involve writes (inserting transactions, updating settings). A
-connection pool would provide no real throughput benefit — writes would still
-serialise at the SQLite level.
+SQLite in WAL mode supports multiple concurrent _readers_ but only one concurrent _writer_. For a single-user desktop application, all meaningful operations involve writes (inserting transactions, updating settings). A connection pool would provide no real throughput benefit because writes serialize at the SQLite file level anyway.
+Furthermore, SQLCipher's `PRAGMA key` is per-connection. A pool of N connections would require N separate unlock calls, creating a window where some pooled connections are unlocked and others are not, significantly complicating the cryptographic lifecycle.
 
-More importantly, SQLCipher's `PRAGMA key` is per-connection. A pool of N
-connections would require N separate unlock calls and N separate key validations,
-complicating the unlock lifecycle and creating a window where some pooled
-connections are unlocked and others are not.
+**Why `Arc<Mutex<Connection>>` was rejected:**
 
-**Why `spawn_blocking`:**
-
-`rusqlite` calls block the calling thread. Calling them directly in an `async`
-function would stall the Tokio executor. `tokio::task::spawn_blocking` offloads
-the blocking call to a dedicated thread pool, keeping the async runtime
-responsive.
+Originally, we proposed sharing the connection via an `Arc<Mutex>`. However, this approach introduces lock contention, risks deadlocking (if a guard is accidentally held across an `await` point), and litters the codebase with repetitive `tokio::task::spawn_blocking` boilerplate in every command.
 
 ## Decision
 
-Maintain a single `Arc<Mutex<Connection>>` stored in `tauri::State`.
+We will use the **Actor Pattern** by dedicating a single OS thread to own the database connection exclusively.
+
+1. **The DB Actor**: At startup, we spawn a single dedicated thread. This thread opens the database, decrypts it via `PRAGMA key`, and enters a continuous loop listening to a `crossbeam_channel::Receiver<DbRequest>` (or `std::sync::mpsc::Receiver`).
+2. **The Messages**: We define a `DbRequest` enum representing all possible database operations. If the caller expects a return value, the enum variant contains a `tokio::sync::oneshot::Sender` to transmit the result back.
+3. **The Workflow**: Background tasks never touch `rusqlite` directly. They construct a `DbRequest` and send it to the actor thread, awaiting the response.
 
 ```rust
-pub type DbConn = Arc<Mutex<rusqlite::Connection>>;
+pub enum DbRequest {
+    GetRunningBalances {
+        reply_to: oneshot::Sender<Result<f64, AppError>>,
+    },
+    CommitTransaction {
+        transaction: TransactionData,
+        reply_to: oneshot::Sender<Result<(), AppError>>,
+    },
+}
 ```
-
-Every Tauri command that accesses the DB:
-
-1. Clones the `Arc` (cheap reference count increment)
-2. Calls `tokio::task::spawn_blocking(move || { let conn = arc.lock()?; ... })`
-3. Holds the `Mutex` guard only for the duration of the SQL operation
-4. Releases the guard before returning
-
-The `Mutex` is a `std::sync::Mutex` (not `tokio::sync::Mutex`) because
-`rusqlite::Connection` is `!Send` and the lock is always acquired and released
-on the same `spawn_blocking` thread.
 
 ## Consequences
 
-- **Good:** Simple lifecycle. One connection, one unlock call, one PRAGMA key.
-- **Good:** No pool exhaustion, no pool configuration tuning.
-- **Good:** All DB access is serialised — no possibility of concurrent write
-  corruption.
-- **Good:** Consistent with WAL mode's write-serialisation guarantees.
-- **Trade-off:** Read queries also serialise behind the Mutex. For a
-  single-user desktop app this is imperceptible (SQLite read latency is
-  microseconds for typical ledger query sizes).
-- **Future:** If profiling reveals read contention (e.g., analytics queries
-  blocking import commits), a dedicated read-only connection can be added as
-  a second `tauri::State` entry without changing the command API.
+- **Good:** Zero locking overhead. There is no `Mutex`, eliminating lock contention and deadlocks entirely.
+- **Good:** Perfect fit for SQLite. A single dedicated thread perfectly models SQLite's strict write-serialization constraint.
+- **Good:** Clean encryption lifecycle. Because only one thread ever opens the connection, we handle the `PRAGMA key` decryption exactly once, in a highly isolated scope.
+- **Good:** Enforces clean architectural boundaries. SQL logic cannot leak into UI commands; it remains strictly inside the DB actor.
+- **Trade-off:** Requires slightly more boilerplate to define the request and response channels (`DbRequest`), but this pays off in long-term stability and predictability.

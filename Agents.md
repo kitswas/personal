@@ -4,7 +4,7 @@ Cross-tool agent instructions for any AI coding assistant working on this reposi
 
 ## 1. Single Source of Truth (Absolute Rule)
 
-No piece of state lives in two places. If a constant, configuration, or state field exists in the Rust backend, do not duplicate it in the TypeScript frontend (or vice versa). Expose it via Tauri IPC, generate bindings, or pass it dynamically. Adding a duplicate state field breeds drift bugs and will be automatically rejected.
+No piece of state lives in two places. State is strictly held in the `state.rs` module. The UI projection in `app.rs` is strictly read-only and may only emit `Message` intents. Do not duplicate state across different components or views.
 
 ## 2. Explicit Decisions & Zero Ambiguity
 
@@ -19,12 +19,11 @@ Code requires understanding, testing, maintaining, and debugging.
 
 ## 4. Strict Architectural Boundaries
 
-Respect the Tauri paradigm.
+Respect the Unidirectional Data Flow pattern.
 
-- **Frontend (`src/`):** Strictly for UI, state management, and user interaction. Written in TypeScript. Must not contain OS-level logic or hardcoded system paths.
-- **Backend (`src-tauri/`):** Strictly for system/OS access, file system operations, and heavy computation. Written in Rust.
-- **Communication:** Cross-boundary communication happens exclusively through Tauri IPC commands and events. Shared DTOs/types must be synchronized.
-- **Typesafe IPC:** Do not reject Promises for domain logic. Tauri commands must return a structured Result/Either envelope (e.g., `IpcResponse<T, E>`) so domain errors are returned as values. Use `ts-rs` to generate strict TypeScript interfaces for all IPC payloads.
+- **State (`state.rs`):** Pure state management. Holds `AppState`, `Message`, and `Command` enums. Transitions state via a pure `apply_message` function.
+- **UI (`app.rs`):** Strictly for immediate-mode GUI projection using `egui`. It takes an immutable reference to `AppState` and a message transmitter. It MUST NEVER mutate state directly.
+- **Async Runtime:** Side effects (like `LoadData`, DB queries) are emitted as `Command`s. They are spawned in Tokio background tasks and their results are piped back to the main thread as `Message`s via channels.
 
 ## 5. Total Correctness & Functional Patterns
 
@@ -43,19 +42,19 @@ Design for failure. Assume the user will force-quit the application or the machi
 
 ## 7. Zero-Defect Safety
 
-- **No Unhandled Exceptions:** Exhaustively handle all errors. In Rust, propagate errors via `Result` and exhaustively match `Option`. Do not leave `unwrap()` or `expect()` in production paths.
+- **No Unhandled Exceptions:** Exhaustively handle all errors via `Result` and exhaustively match `Option`. Do not leave `unwrap()` or `expect()` in production paths.
 - **Exhaustive Domain Errors:** Do not use `anyhow` or generic strings for errors returned to the UI. Define specific Rust `enum`s for all failure modes.
-- **Exhaustive UI Handling:** The frontend must use strict pattern matching (e.g., `ts-pattern` `.exhaustive()`) on all state transitions and IPC responses. TypeScript builds must fail if a Rust error variant is unhandled in the UI.
+- **Exhaustive State Handling:** Rust enums must be exhaustively matched in `apply_message`.
 - **No Undefined Behavior or Data Races:** Rely on Rust's borrow checker and type system. All library crates must carry `#![deny(unsafe_code)]`. Do not use `unsafe` blocks in application code under any circumstances.
 
 ## 8. Asynchronous UI State Visibility
 
 For every asynchronous operation, the UI must explicitly and accurately reflect the current execution state to the user. Do not silently fail or trap the user in a loading state.
 
-- **State Machines over Flags:** Never use independent boolean flags (`isLoading`, `isError`). Wrap asynchronous IPC calls in a declarative state machine primitive (e.g., `createIpcCommand`) using discriminated unions (`Idle | Loading | Success | Error`).
+- **State Machines over Flags:** Never use independent boolean flags (`is_loading`, `is_error`). Wrap async commands in state enums using discriminated variants (`Idle`, `Loading`, `Success(T)`, `Error(E)`).
 - **Processing:** Always show a clear active state. Use definite progress indicators if the operation length is quantifiable or has checkpoints, or indefinite indicators (spinners) if unknown.
 - **Success:** Provide unambiguous visual confirmation when an operation completes successfully.
-- **Failure:** Catch all rejections and surface them gracefully to the UI. The user must be provided with a clear, actionable, and human-readable reason for the failure.
+- **Failure:** Catch all errors and surface them gracefully to the UI. The user must be provided with a clear, actionable, and human-readable reason for the failure.
 
 ## 9. Git Workflow & Holistic Atomic Commits
 
@@ -66,14 +65,13 @@ For every asynchronous operation, the UI must explicitly and accurately reflect 
 
 ## 10. Tooling and Environment Baseline
 
-- **Frontend:** Use `pnpm` exclusively (never `npm` or `yarn`). Run strictly typed TypeScript.
-- **Backend:** Use standard Cargo tooling. Treat `cargo clippy` warnings as errors.
-- **Validation:** Before finishing a task, ensure both environments compile and validate successfully.
+- **Standard Cargo:** Use standard Cargo tooling. Treat `cargo clippy` warnings as errors.
+- **Validation:** Before finishing a task, ensure the crate compiles and validates successfully via `cargo check` and `cargo test`.
 
 ## 11. Dependency Management & Ecosystem Security
 
-- **Minimal JS Dependencies:** The JavaScript ecosystem carries supply chain risks. Keep frontend dependencies to an absolute bare minimum. Write utility functions yourself if the alternative is importing a micro-library.
-- **48-Hour Rule:** Any new npm package or version bump must have a minimum release age of **48 hours** before integration.
+- **Minimal Dependencies:** Keep dependencies to an absolute bare minimum. Write utility functions yourself if the alternative is importing a micro-library.
+- **48-Hour Rule:** Any new package or version bump must have a minimum release age of **48 hours** before integration.
 
 ## 12. Cross-Platform Developer Experience (DX)
 
@@ -81,27 +79,22 @@ The developer experience must be completely frictionless. Ensure that build scri
 
 ## 13. Directory Map & Restricted Zones
 
-- `src/` — Frontend application code (Typescript).
-- `src-tauri/src/` — Rust backend code and IPC command handlers.
-- `e2e/` — Playwright end-to-end tests (run against the compiled binary via `tauri-driver`).
+- `src/` — Pure Rust application code (egui Frontend + Backend logic).
 - `docs/arch/` — Architecture Decision Records (ADRs).
-- **Restricted:** Do not modify auto-generated IPC bindings, lockfiles (`pnpm-lock.yaml`, `Cargo.lock`), third-party vendored code, or this `AGENTS.md` file unless explicitly instructed.
+- **Restricted:** Do not modify lockfiles (`Cargo.lock`), third-party vendored code, or this `AGENTS.md` file unless explicitly instructed.
 
-## 14. Auto-Generated Architecture Documentation
+## 14. Documentation Standards (Why, not What)
 
-Do not manually draw static system diagrams that will fall out of date. Generate architecture diagrams and dependency graphs directly from the codebase.
+Code documentation (Rustdoc) must exclusively explain **WHY** a block of code exists, the rationale behind a decision, or the context of a workaround. It must **NEVER** explain **WHAT** the code is doing (the syntax itself is the "what").
 
-- Rely on tools like `dependency-cruiser`, `typedoc`, and `mermaid` to programmatically map system boundaries.
+- We already maintain detailed manual architecture documentation in the `docs/arch/` ADRs. Refer to them for system-wide context.
+- Use `cargo-modules` for generating codebase architecture diagrams automatically rather than manually maintaining them.
 
 ## 15. Common Commands
 
 Use these to validate your work before submitting changes:
 
-- **Install dependencies:** `pnpm install`
-- **Start dev server (Frontend + Rust):** `pnpm tauri dev`
-- **Frontend validation:** `pnpm check` && `pnpm lint`
+- **Build / Run:** `cargo run`
 - **Backend validation:** `cargo fmt --all -- --check` && `cargo clippy --all-targets -- -D warnings`
-- **Run unit tests:** `cargo test` (Backend) / `pnpm test` (Frontend component tests)
-- **Run fuzz tests:** `cargo +nightly fuzz run <target>` (Linux/WSL2 only; see `src-tauri/fuzz/`)
-- **Run E2E tests:** `pnpm test:e2e` (requires compiled binary; see `e2e/`)
-- **Generate Docs/Graphs:** `pnpm docs:all` (Generates TypeDoc definitions and codebase dependency graphs)
+- **Run unit tests:** `cargo test`
+- **Run fuzz tests:** `cargo +nightly fuzz run <target>`

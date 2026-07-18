@@ -35,7 +35,7 @@ This compiles SQLCipher from source during `cargo build`, relying on the system'
 
 The `bundled-sqlcipher-vendored-openssl` feature allows using `bundled-sqlcipher` with a vendored version of OpenSSL (via the `openssl-sys` crate) as the crypto provider. This uses the `openssl-src` crate to compile and statically link to a copy of OpenSSL.
 
-However, the build process requires a C compiler, Perl (and perl-core), and make. All that tooling makes it very problematic to manage via `mise` or makes it highly Windows-specific (the build does not work well on other platforms). To avoid this heavy and platform-specific toolchain, we rejected the vendored OpenSSL approach.
+However, the build process requires a C compiler, Perl (and perl-core), and make. To avoid this heavy and platform-specific toolchain, we rejected the vendored OpenSSL approach.
 
 ## Consequences
 
@@ -43,4 +43,4 @@ However, the build process requires a C compiler, Perl (and perl-core), and make
 - **Good:** Industry-standard AES-256 page-level encryption; same algorithm used by Signal, WhatsApp, and 1Password for local SQLite stores.
 - **Good:** Compatible with WAL mode for crash-safe writes.
 - **Trade-off:** Requires developers and CI environments to have OpenSSL/LibreSSL pre-installed (e.g. via `vcpkg`, `choco`, `brew`, or `apt`) to provide `libcrypto`.
-- **Trade-off:** `rusqlite` is synchronous. Tauri commands that touch the DB are wrapped in `tokio::task::spawn_blocking` to avoid blocking the async executor. See ADR 0005 for the connection-handle strategy.
+- **Trade-off:** `rusqlite` is synchronous. Async commands that touch the DB are wrapped in `tokio::task::spawn_blocking` to avoid blocking the async executor. See ADR 0005 for the connection-handle strategy.

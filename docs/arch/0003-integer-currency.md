@@ -6,8 +6,7 @@
 ## Context
 
 Financial applications must represent money without rounding error. IEEE 754
-double-precision floating-point (the default numeric type in JavaScript, SQLite
-`REAL`, and naïve Rust) introduces representational errors:
+double-precision floating-point introduces representational errors:
 
 ```
 0.1 + 0.2 = 0.30000000000000004   // IEEE 754
@@ -21,7 +20,7 @@ Alternatives considered:
 
 | Approach                              | Pros                                     | Cons                                      |
 | ------------------------------------- | ---------------------------------------- | ----------------------------------------- |
-| `f64` / SQLite `REAL`                 | Native in JS and SQL                     | Rounding errors; cannot guarantee SUM = 0 |
+| `f64` / SQLite `REAL`                 | Native in SQL                            | Rounding errors; cannot guarantee SUM = 0 |
 | `Decimal` crate (arbitrary precision) | Exact; handles multi-currency arithmetic | Heavier; not natively stored in SQLite    |
 | `INTEGER` (smallest unit)             | Exact; native SQLite type; zero overhead | Requires explicit scaling in UI layer     |
 | `TEXT` (string decimals)              | Exact representation                     | No native arithmetic; slow aggregation    |
@@ -42,11 +41,13 @@ knows the correct scale factor to apply when displaying amounts.
 amount INTEGER NOT NULL   -- paise (for INR), cents (for USD), etc.
 ```
 
-The Rust backend always works with `i64`. The frontend converts for display:
+The Rust backend always works with `i64`. The egui frontend converts for display:
 
-```typescript
+```rust
 // Pure function — no mutation
-const formatAmount = (paise: number, commodity: string): string => { ... }
+pub fn format_amount(paise: i64, commodity: &str) -> String {
+    // implementation
+}
 ```
 
 The double-entry invariant is checked in integer arithmetic:
