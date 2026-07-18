@@ -102,7 +102,7 @@ impl<'a> egui::Widget for ElegantButton<'a> {
 				ui.visuals_mut().widgets.active.fg_stroke.color = text_color;
 			}
 
-			ui.add(egui::Button::new(self.text))
+			ui.add(egui::Button::new(self.text).wrap_mode(egui::TextWrapMode::Extend))
 		})
 		.inner
 	}

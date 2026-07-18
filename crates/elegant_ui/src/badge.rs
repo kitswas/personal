@@ -60,7 +60,12 @@ impl<'a> egui::Widget for ElegantBadge<'a> {
 				theme.spacing.badge_corner_radius as u8,
 			))
 			.show(ui, |ui| {
-				ui.label(egui::RichText::new(self.text).color(fg_fill).size(12.0));
+				ui.add(
+					egui::Label::new(
+						egui::RichText::new(self.text).color(fg_fill).size(12.0),
+					)
+					.wrap_mode(egui::TextWrapMode::Extend),
+				);
 			})
 			.response
 	}
