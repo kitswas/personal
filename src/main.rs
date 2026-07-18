@@ -8,6 +8,7 @@
 mod app;
 mod domain;
 mod infrastructure;
+mod ui;
 
 use app::FinanceApp;
 
