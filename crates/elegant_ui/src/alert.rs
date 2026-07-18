@@ -35,8 +35,7 @@ impl<'a> egui::Widget for Alert<'a> {
 
 		let response = frame
 			.show(ui, |ui| {
-				ui.set_width(300.0);
-				ui.horizontal(|ui| {
+				ui.horizontal_wrapped(|ui| {
 					ui.label(egui::RichText::new(self.title).strong().color(color));
 					ui.add_space(4.0);
 					ui.label(egui::RichText::new(self.content).color(theme.foreground));

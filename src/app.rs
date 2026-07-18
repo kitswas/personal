@@ -86,251 +86,196 @@ impl eframe::App for FinanceApp {
 				ui.add_space(40.0);
 			});
 
+			const CARD_OUTER_WIDTH: f32 = 360.0;
+			const GRID_GAP: f32 = 24.0;
+			const SCROLLBAR_ALLOWANCE: f32 = 40.0;
+			const CARD_INNER_PADDING: f32 = 24.0; // from SpacingConfig::default().card_inner_margin
+
+			let panel_width = ui.available_width();
+			let effective_width = (panel_width - SCROLLBAR_ALLOWANCE).max(0.0);
+			let cols = ((effective_width / (CARD_OUTER_WIDTH + GRID_GAP)).floor() as usize).max(1);
+
+			let actual_grid_width = (cols as f32 * CARD_OUTER_WIDTH) + ((cols.saturating_sub(1)) as f32 * GRID_GAP);
+
+			ui.label(
+				egui::RichText::new(format!(
+					"DEBUG => panel_width: {:.1}, effective_width: {:.1}, cols: {}, required_width: {:.1}, gap: {:.1}, card: {:.1}",
+					panel_width, effective_width, cols, actual_grid_width, GRID_GAP, CARD_OUTER_WIDTH
+				)).color(egui::Color32::RED)
+			);
+
+
 			egui::ScrollArea::vertical()
 				.auto_shrink([false, false])
 				.show(ui, |ui| {
-					ui.add_space(16.0);
+					ui.add_space(GRID_GAP);
 
-					egui::Frame::default()
-						.inner_margin(egui::Margin::symmetric(24, 0))
-						.show(ui, |ui| {
-							ui.with_layout(
-								egui::Layout::left_to_right(egui::Align::TOP)
-									.with_main_wrap(true),
-								|ui| {
-									ui.spacing_mut().item_spacing =
-										egui::vec2(32.0, 32.0);
-									let block_width = 320.0;
+					let inner_width = CARD_OUTER_WIDTH - (2.0 * CARD_INNER_PADDING);
 
-									// Block: Buttons
-									ui.allocate_ui(egui::vec2(block_width, 0.0), |ui| {
-										ui.set_max_width(block_width);
-										ui.label(egui::RichText::new("Buttons").strong());
-										ui.add_space(8.0);
-										ui.horizontal_wrapped(|ui| {
-											ui.spacing_mut().item_spacing =
-												egui::vec2(8.0, 8.0);
-											ui.add(
-												ElegantButton::new("Primary")
-													.variant(Variant::Primary),
-											);
-											ui.add(
-												ElegantButton::new("Secondary")
-													.variant(Variant::Secondary),
-											);
-											ui.add(
-												ElegantButton::new("Danger")
-													.variant(Variant::Danger),
-											);
-											ui.add(
-												ElegantButton::new("Outline").outline(),
-											);
-											ui.add(
-												ElegantButton::new("Danger Outline")
-													.variant(Variant::Danger)
-													.outline(),
-											);
-											ui.add(ElegantButton::new("Ghost").ghost());
-										});
-									});
+					let mut cards: Vec<Box<dyn FnMut(&mut egui::Ui)>> = vec![
+						Box::new(|ui: &mut egui::Ui| {
+							ui.label(egui::RichText::new("Buttons").strong());
+							ui.add_space(8.0);
+							ui.horizontal_wrapped(|ui| {
+								ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+								ui.add(ElegantButton::new("Primary").variant(Variant::Primary));
+								ui.add(ElegantButton::new("Secondary").variant(Variant::Secondary));
+								ui.add(ElegantButton::new("Danger").variant(Variant::Danger));
+								ui.add(ElegantButton::new("Outline").outline());
+								ui.add(ElegantButton::new("Danger Outline").variant(Variant::Danger).outline());
+								ui.add(ElegantButton::new("Ghost").ghost());
+							});
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							ui.label(egui::RichText::new("Badges & Avatars").strong());
+							ui.add_space(8.0);
+							ui.horizontal_wrapped(|ui| {
+								ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+								ui.add(ElegantBadge::new("Default"));
+								ui.add(ElegantBadge::new("Secondary").variant(Variant::Secondary));
+								ui.add(ElegantBadge::new("Outline").outline());
+								ui.add(ElegantBadge::new("Success").variant(Variant::Success));
+								ui.add(ElegantBadge::new("Warning").variant(Variant::Warning));
+								ui.add(ElegantBadge::new("Danger").variant(Variant::Danger));
+								ui.add_space(8.0);
+								ui.add(Avatar::new("JD"));
+							});
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							ui.label(egui::RichText::new("Alerts").strong());
+							ui.add_space(8.0);
+							ui.add(Alert::new("Success!", "Your changes have been saved.").variant(Variant::Success));
+							ui.add_space(8.0);
+							ui.add(Alert::new("Warning!", "Please review before continuing.").variant(Variant::Warning));
+							ui.add_space(8.0);
+							ui.add(Alert::new("Info", "This is a default alert message.").variant(Variant::Info));
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							ui.label(egui::RichText::new("Cards & Accordion").strong());
+							ui.add_space(8.0);
+							Card::new().show(ui, |ui| {
+								ui.heading("Card Title");
+								ui.add_space(8.0);
+								ui.label("Card description goes here.");
+								ui.add_space(16.0);
+								ui.horizontal_wrapped(|ui| {
+									ui.add(ElegantButton::new("Cancel").ghost());
+									ui.add(ElegantButton::new("Save Changes").variant(Variant::Primary));
+								});
+							});
+							ui.add_space(16.0);
+							ElegantAccordion::new("acc1", "Advanced Options").show(ui, |ui| {
+								ui.label("Hidden content inside the accordion.");
+							});
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							ui.label(egui::RichText::new("Inputs & Dropdowns").strong());
+							ui.add_space(8.0);
+							ui.text_input(&mut self.state.sample_input, "Enter text here...");
+							ui.add_space(16.0);
+							ui.label(egui::RichText::new("Tags").strong());
+							ui.add_space(8.0);
+							ui.add(ElegantTagInput::new(&mut self.state.tags, &mut self.state.new_tag));
+							ui.add_space(16.0);
+							ui.label(egui::RichText::new("Dropdown").strong());
+							ui.add_space(8.0);
+							ElegantDropdown::new("dropdown1", &mut self.state.selected_dropdown)
+								.options(vec![
+									("option1".to_string(), "Option 1".to_string()),
+									("option2".to_string(), "Option 2".to_string()),
+									("option3".to_string(), "Option 3".to_string()),
+								]).show(ui);
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							ui.label(egui::RichText::new("Progress & Skeleton").strong());
+							ui.add_space(8.0);
+							ui.add(Progress::new(0.65));
+							ui.add_space(8.0);
+							let theme = ElegantTheme::get(ui.ctx());
+							ui.add(egui::Spinner::new().color(theme.primary));
+							ui.add_space(16.0);
+							ui.label(egui::RichText::new("Skeleton").strong());
+							ui.add_space(8.0);
+							ui.add(Skeleton::new(200.0, 24.0));
+							ui.add_space(4.0);
+							ui.add(Skeleton::new(150.0, 16.0));
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							ui.label(egui::RichText::new("Tabs").strong());
+							ui.add_space(8.0);
+							egui::ScrollArea::horizontal().show(ui, |ui| {
+								ui.add(ElegantTabs::new(&["Overview", "Transactions", "Settings"], &mut self.state.selected_tab));
+							});
+							ui.add_space(16.0);
+							ui.label(format!("Selected tab: {}", self.state.selected_tab));
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							ui.label(egui::RichText::new("Toast Notification").strong());
+							ui.add_space(8.0);
+							if ui.add(ElegantButton::new("Show Toast").variant(Variant::Success)).clicked() {
+								self.state.show_toast = true;
+							}
+						}),
+					];
 
-									// Block: Badges & Avatars
-									ui.allocate_ui(egui::vec2(block_width, 0.0), |ui| {
-										ui.set_max_width(block_width);
-										ui.label(
-											egui::RichText::new("Badges & Avatars")
-												.strong(),
-										);
-										ui.add_space(8.0);
-										ui.horizontal_wrapped(|ui| {
-											ui.spacing_mut().item_spacing =
-												egui::vec2(8.0, 8.0);
-											ui.add(ElegantBadge::new("Default"));
-											ui.add(
-												ElegantBadge::new("Secondary")
-													.variant(Variant::Secondary),
-											);
-											ui.add(
-												ElegantBadge::new("Outline").outline(),
-											);
-											ui.add(
-												ElegantBadge::new("Success")
-													.variant(Variant::Success),
-											);
-											ui.add(
-												ElegantBadge::new("Warning")
-													.variant(Variant::Warning),
-											);
-											ui.add(
-												ElegantBadge::new("Danger")
-													.variant(Variant::Danger),
-											);
-											ui.add_space(16.0);
-											ui.add(Avatar::new("JD"));
-										});
-									});
 
-									// Block: Alerts
-									ui.allocate_ui(egui::vec2(block_width, 0.0), |ui| {
-										ui.set_max_width(block_width);
-										ui.label(egui::RichText::new("Alerts").strong());
-										ui.add_space(8.0);
-										ui.add(
-											Alert::new(
-												"Success!",
-												"Your changes have been saved.",
-											)
-											.variant(Variant::Success),
-										);
-										ui.add_space(8.0);
-										ui.add(
-											Alert::new(
-												"Warning!",
-												"Please review before continuing.",
-											)
-											.variant(Variant::Warning),
-										);
-										ui.add_space(8.0);
-										ui.add(
-											Alert::new(
-												"Info",
-												"This is a default alert message.",
-											)
-											.variant(Variant::Info),
-										);
-									});
+					for chunk in cards.chunks_mut(cols) {
+    // 1. Get the exact starting screen coordinates for this row
+    let start_pos = ui.next_widget_position();
+    let mut max_y = start_pos.y;
 
-									// Block: Cards & Accordion
-									ui.allocate_ui(egui::vec2(block_width, 0.0), |ui| {
-										ui.set_max_width(block_width);
-										ui.label(
-											egui::RichText::new("Cards & Accordion")
-												.strong(),
-										);
-										ui.add_space(8.0);
-										ui.add(Card::new(
-											"Card Title",
-											"Card description goes here.",
-										));
+    for (col_idx, card_fn) in chunk.iter_mut().enumerate() {
+        let x_offset = col_idx as f32 * (CARD_OUTER_WIDTH + GRID_GAP);
 
-										ui.add_space(16.0);
-										ElegantAccordion::new("acc1", "Advanced Options")
-											.show(ui, |ui| {
-												ui.label(
-													"Here is some hidden content inside the accordion.",
-												);
-											});
-									});
+        // 2. Carve out a strict, unyielding bounding box for the entire card
+        let card_rect = egui::Rect::from_min_max(
+            start_pos + egui::vec2(x_offset, 0.0),
+            start_pos + egui::vec2(x_offset + CARD_OUTER_WIDTH, f32::INFINITY)
+        );
 
-									// Block: Inputs & Dropdowns
-									ui.allocate_ui(egui::vec2(block_width, 0.0), |ui| {
-										ui.set_max_width(block_width);
-										ui.label(
-											egui::RichText::new("Inputs & Dropdowns")
-												.strong(),
-										);
-										ui.add_space(8.0);
-										ui.text_input(
-											&mut self.state.sample_input,
-											"Enter text here...",
-										);
+        // 3. Create a deeply isolated child UI.
+        // UiBuilder::new().max_rect physically cuts off the infinite layout poison.
+        let mut cell_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(card_rect)
+                .layout(egui::Layout::top_down(egui::Align::LEFT))
+        );
 
-										ui.add_space(16.0);
-										ui.label(egui::RichText::new("Tags").strong());
-										ui.add_space(8.0);
-										ui.add(ElegantTagInput::new(
-											&mut self.state.tags,
-											&mut self.state.new_tag,
-										));
+        Card::new().show(&mut cell_ui, |card_ui| {
+            // 4. THE FATAL FLAW FIX:
+            // Even inside the card, `egui::Frame` can leak intrinsic sizing.
+            // We must forcibly lock the inner UI to the exact mathematical inner width.
+            let inner_pos = card_ui.next_widget_position();
+            let strict_rect = egui::Rect::from_min_size(
+                inner_pos,
+                egui::vec2(inner_width, f32::INFINITY)
+            );
 
-										ui.add_space(16.0);
-										ui.label(
-											egui::RichText::new("Dropdown").strong(),
-										);
-										ui.add_space(8.0);
-										ElegantDropdown::new(
-											"dropdown1",
-											&mut self.state.selected_dropdown,
-										)
-										.options(vec![
-											(
-												"option1".to_string(),
-												"Option 1".to_string(),
-											),
-											(
-												"option2".to_string(),
-												"Option 2".to_string(),
-											),
-											(
-												"option3".to_string(),
-												"Option 3".to_string(),
-											),
-										])
-										.show(ui);
-									});
+            // Create a final sandbox. horizontal_wrapped will hit this exact
+            // 312px wall and have no choice but to wrap the buttons.
+            let mut strict_ui = card_ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(strict_rect)
+                    .layout(egui::Layout::top_down(egui::Align::LEFT))
+            );
 
-									// Block: Progress, Spinners & Skeleton
-									ui.allocate_ui(egui::vec2(block_width, 0.0), |ui| {
-										ui.set_max_width(block_width);
-										ui.label(
-											egui::RichText::new(
-												"Progress, Spinners & Skeleton",
-											)
-											.strong(),
-										);
-										ui.add_space(8.0);
-										ui.add(Progress::new(0.65));
-										ui.add_space(8.0);
-										let theme = ElegantTheme::get(ui.ctx());
-										ui.add(egui::Spinner::new().color(theme.primary));
+            card_fn(&mut strict_ui);
 
-										ui.add_space(16.0);
-										ui.label(
-											egui::RichText::new("Skeleton").strong(),
-										);
-										ui.add_space(8.0);
-										ui.add(Skeleton::new(200.0, 24.0));
-										ui.add_space(4.0);
-										ui.add(Skeleton::new(150.0, 16.0));
-									});
+            // 5. Advance the card's internal cursor by the wrapped content height
+            // so the Card background grows vertically to wrap around it.
+            card_ui.allocate_space(strict_ui.min_rect().size());
+        });
 
-									// Block: Tabs and Toast
-									ui.allocate_ui(egui::vec2(block_width, 0.0), |ui| {
-										ui.set_max_width(block_width);
-										ui.label(egui::RichText::new("Tabs").strong());
-										ui.add_space(8.0);
-										ui.add(ElegantTabs::new(
-											&["Overview", "Transactions", "Settings"],
-											&mut self.state.selected_tab,
-										));
-										ui.add_space(16.0);
-										ui.label(format!(
-											"Selected Tab Index: {}",
-											self.state.selected_tab
-										));
-									});
+        // Track the tallest card in the row
+        max_y = max_y.max(cell_ui.min_rect().max.y);
+    }
 
-									// Block: Toast Notification
-									ui.allocate_ui(egui::vec2(block_width, 0.0), |ui| {
-										ui.set_max_width(block_width);
-										ui.label(
-											egui::RichText::new("Toast Notification")
-												.strong(),
-										);
-										ui.add_space(8.0);
-										if ui
-											.add(
-												ElegantButton::new("Show Toast")
-													.variant(Variant::Success),
-											)
-											.clicked()
-										{
-											self.state.show_toast = true;
-										}
-									});
-								},
-							);
-						});
+    // 6. Officially register the entire row's space with the parent scroll area
+    ui.allocate_space(egui::vec2(actual_grid_width, max_y - start_pos.y));
+    ui.add_space(GRID_GAP);
+}
+
+					ui.add_space(32.0);
 				});
 		});
 
