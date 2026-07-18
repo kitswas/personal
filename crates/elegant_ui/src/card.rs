@@ -19,9 +19,9 @@ impl<'a> egui::Widget for Card<'a> {
 	fn ui(self, ui: &mut egui::Ui) -> egui::Response {
 		let theme = ElegantTheme::get(ui.ctx());
 		egui::Frame::new()
-			.stroke(egui::Stroke::new(1.0, theme.border))
-			.inner_margin(24.0)
-			.corner_radius(egui::CornerRadius::same(6))
+			.stroke(egui::Stroke::new(theme.spacing.border_width, theme.border))
+			.inner_margin(theme.spacing.card_inner_margin)
+			.corner_radius(egui::CornerRadius::same(theme.spacing.corner_radius as u8))
 			.show(ui, |ui| {
 				ui.set_width(300.0);
 				ui.heading(self.title);

@@ -19,7 +19,7 @@ pub struct FinanceApp {
 impl FinanceApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
 		let (tx, rx) = unbounded();
-		let theme = ElegantTheme::build(ThemeMode::System); // Reads OS dark/light mode and accent color
+		let theme = ElegantTheme::build(ThemeMode::System, MonaspaceFont::Neon); // Reads OS dark/light mode and accent color
 		theme.apply(&cc.egui_ctx);
 		Self {
 			state: AppState {

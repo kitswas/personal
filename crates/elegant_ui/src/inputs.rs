@@ -9,9 +9,9 @@ impl InputUiExtensions for egui::Ui {
 	fn text_input(&mut self, text: &mut String, placeholder: &str) -> egui::Response {
 		let theme = ElegantTheme::get(self.ctx());
 		let frame = egui::Frame::new()
-			.inner_margin(egui::vec2(12.0, 8.0))
-			.corner_radius(egui::CornerRadius::same(6))
-			.stroke(egui::Stroke::new(1.0, theme.border))
+			.inner_margin(theme.spacing.input_inner_margin)
+			.corner_radius(egui::CornerRadius::same(theme.spacing.corner_radius as u8))
+			.stroke(egui::Stroke::new(theme.spacing.border_width, theme.border))
 			.fill(theme.background);
 
 		frame

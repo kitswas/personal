@@ -14,4 +14,4 @@ pub use button::ElegantButton;
 pub use card::Card;
 pub use inputs::InputUiExtensions;
 pub use progress::Progress;
-pub use theme::{ElegantTheme, ThemeMode, Variant};
+pub use theme::{ElegantTheme, MonaspaceFont, ThemeMode, Variant};

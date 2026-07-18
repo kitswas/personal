@@ -32,23 +32,36 @@ impl<'a> egui::Widget for ElegantBadge<'a> {
 		let theme = ElegantTheme::get(ui.ctx());
 		let color = theme.get_color(self.variant);
 
-		let btn = if self.outline {
-			egui::Button::new(egui::RichText::new(self.text).color(color).size(12.0))
-				.fill(egui::Color32::TRANSPARENT)
-				.stroke(egui::Stroke::new(1.0, color))
-				.corner_radius(egui::CornerRadius::same(12))
+		let (bg_fill, fg_fill, stroke) = if self.outline {
+			let (text_c, stroke_c) = if self.variant == Variant::Secondary {
+				(theme.foreground, theme.border)
+			} else {
+				(color, color)
+			};
+			(
+				egui::Color32::TRANSPARENT,
+				text_c,
+				egui::Stroke::new(theme.spacing.border_width, stroke_c),
+			)
 		} else {
 			let text_color = if self.variant == Variant::Secondary {
 				theme.foreground
 			} else {
 				theme.background
 			};
-			egui::Button::new(egui::RichText::new(self.text).color(text_color).size(12.0))
-				.fill(color)
-				.stroke(egui::Stroke::NONE)
-				.corner_radius(egui::CornerRadius::same(12))
+			(color, text_color, egui::Stroke::NONE)
 		};
 
-		ui.add_enabled(false, btn)
+		egui::Frame::new()
+			.fill(bg_fill)
+			.stroke(stroke)
+			.inner_margin(theme.spacing.badge_inner_margin)
+			.corner_radius(egui::CornerRadius::same(
+				theme.spacing.badge_corner_radius as u8,
+			))
+			.show(ui, |ui| {
+				ui.label(egui::RichText::new(self.text).color(fg_fill).size(12.0));
+			})
+			.response
 	}
 }

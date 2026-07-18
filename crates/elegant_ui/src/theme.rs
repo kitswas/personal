@@ -26,6 +26,80 @@ impl Default for Variant {
 	}
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MonaspaceFont {
+	Argon,
+	Krypton,
+	Neon,
+	Radon,
+	Xenon,
+}
+
+impl Default for MonaspaceFont {
+	fn default() -> Self {
+		Self::Neon
+	}
+}
+
+pub fn tint_color(color: Color32, factor: f32) -> Color32 {
+	let r = color.r() as f32;
+	let g = color.g() as f32;
+	let b = color.b() as f32;
+	let new_r = r + (255.0 - r) * factor;
+	let new_g = g + (255.0 - g) * factor;
+	let new_b = b + (255.0 - b) * factor;
+	Color32::from_rgb(
+		new_r.clamp(0.0, 255.0) as u8,
+		new_g.clamp(0.0, 255.0) as u8,
+		new_b.clamp(0.0, 255.0) as u8,
+	)
+}
+
+pub fn shade_color(color: Color32, factor: f32) -> Color32 {
+	let r = color.r() as f32;
+	let g = color.g() as f32;
+	let b = color.b() as f32;
+	let new_r = r * (1.0 - factor);
+	let new_g = g * (1.0 - factor);
+	let new_b = b * (1.0 - factor);
+	Color32::from_rgb(
+		new_r.clamp(0.0, 255.0) as u8,
+		new_g.clamp(0.0, 255.0) as u8,
+		new_b.clamp(0.0, 255.0) as u8,
+	)
+}
+
+#[derive(Clone, Debug)]
+pub struct SpacingConfig {
+	pub button_padding: egui::Vec2,
+	pub item_spacing: egui::Vec2,
+	pub window_margin: f32,
+	pub corner_radius: f32,
+	pub badge_inner_margin: egui::Vec2,
+	pub badge_corner_radius: f32,
+	pub card_inner_margin: f32,
+	pub alert_inner_margin: f32,
+	pub input_inner_margin: egui::Vec2,
+	pub border_width: f32,
+}
+
+impl Default for SpacingConfig {
+	fn default() -> Self {
+		Self {
+			button_padding: egui::vec2(16.0, 8.0),
+			item_spacing: egui::vec2(16.0, 16.0),
+			window_margin: 24.0,
+			corner_radius: 6.0,
+			badge_inner_margin: egui::vec2(8.0, 4.0),
+			badge_corner_radius: 12.0,
+			card_inner_margin: 24.0,
+			alert_inner_margin: 16.0,
+			input_inner_margin: egui::vec2(12.0, 8.0),
+			border_width: 1.0,
+		}
+	}
+}
+
 #[derive(Clone, Debug)]
 pub struct ElegantTheme {
 	pub primary: Color32,
@@ -38,6 +112,8 @@ pub struct ElegantTheme {
 	pub danger: Color32,
 	pub info: Color32,
 	pub is_dark: bool,
+	pub font: MonaspaceFont,
+	pub spacing: SpacingConfig,
 }
 
 impl ElegantTheme {
@@ -52,7 +128,23 @@ impl ElegantTheme {
 		}
 	}
 
-	pub fn build(mode: ThemeMode) -> Self {
+	pub fn hover_color(&self, color: Color32) -> Color32 {
+		if self.is_dark {
+			tint_color(color, 0.15)
+		} else {
+			shade_color(color, 0.1)
+		}
+	}
+
+	pub fn active_color(&self, color: Color32) -> Color32 {
+		if self.is_dark {
+			tint_color(color, 0.25)
+		} else {
+			shade_color(color, 0.2)
+		}
+	}
+
+	pub fn build(mode: ThemeMode, font: MonaspaceFont) -> Self {
 		let is_dark = match mode {
 			ThemeMode::Dark => true,
 			ThemeMode::Light => false,
@@ -67,6 +159,8 @@ impl ElegantTheme {
 			}
 		});
 
+		let spacing = SpacingConfig::default();
+
 		if is_dark {
 			Self {
 				primary,
@@ -78,7 +172,9 @@ impl ElegantTheme {
 				warning: Color32::from_rgb(249, 226, 175),
 				danger: Color32::from_rgb(243, 139, 168),
 				info: Color32::from_rgb(137, 180, 250),
-				is_dark: true,
+				is_dark,
+				font,
+				spacing,
 			}
 		} else {
 			Self {
@@ -91,7 +187,9 @@ impl ElegantTheme {
 				warning: Color32::from_rgb(204, 153, 0),
 				danger: Color32::from_rgb(204, 0, 0),
 				info: Color32::from_rgb(0, 102, 204),
-				is_dark: false,
+				is_dark,
+				font,
+				spacing,
 			}
 		}
 	}
@@ -99,7 +197,14 @@ impl ElegantTheme {
 	pub fn apply(&self, ctx: &Context) {
 		ctx.data_mut(|d| d.insert_temp(Id::new("elegant_theme"), self.clone()));
 
-		let font_bytes = include_bytes!("../assets/monaspace.ttf");
+		let font_bytes = match self.font {
+			MonaspaceFont::Argon => include_bytes!("../assets/argon.ttf").as_slice(),
+			MonaspaceFont::Krypton => include_bytes!("../assets/krypton.ttf").as_slice(),
+			MonaspaceFont::Neon => include_bytes!("../assets/neon.ttf").as_slice(),
+			MonaspaceFont::Radon => include_bytes!("../assets/radon.ttf").as_slice(),
+			MonaspaceFont::Xenon => include_bytes!("../assets/xenon.ttf").as_slice(),
+		};
+
 		let mut fonts = FontDefinitions::default();
 		fonts.font_data.insert(
 			"elegant_font".to_owned(),
@@ -124,11 +229,11 @@ impl ElegantTheme {
 		}))
 		.clone();
 
-		style.spacing.item_spacing = egui::vec2(16.0, 16.0);
-		style.spacing.button_padding = egui::vec2(16.0, 8.0);
-		style.spacing.window_margin = Margin::same(24);
+		style.spacing.item_spacing = self.spacing.item_spacing;
+		style.spacing.button_padding = self.spacing.button_padding;
+		style.spacing.window_margin = Margin::same(self.spacing.window_margin as i8);
 
-		let radius = CornerRadius::same(6);
+		let radius = CornerRadius::same(self.spacing.corner_radius as u8);
 		style.visuals.window_corner_radius = radius;
 		style.visuals.widgets.noninteractive.corner_radius = radius;
 		style.visuals.widgets.inactive.corner_radius = radius;
@@ -143,20 +248,21 @@ impl ElegantTheme {
 		visuals.window_fill = self.background;
 		visuals.panel_fill = self.background;
 
+		let border_width = self.spacing.border_width;
 		visuals.widgets.noninteractive.bg_fill = self.background;
-		visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, self.border);
+		visuals.widgets.noninteractive.bg_stroke = Stroke::new(border_width, self.border);
 		visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, self.foreground);
 
 		visuals.widgets.inactive.bg_fill = self.background;
-		visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, self.border);
+		visuals.widgets.inactive.bg_stroke = Stroke::new(border_width, self.border);
 		visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, self.foreground);
 
 		visuals.widgets.hovered.bg_fill = self.secondary;
-		visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, self.border);
+		visuals.widgets.hovered.bg_stroke = Stroke::new(border_width, self.border);
 		visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, self.foreground);
 
 		visuals.widgets.active.bg_fill = self.border;
-		visuals.widgets.active.bg_stroke = Stroke::new(1.0, self.border);
+		visuals.widgets.active.bg_stroke = Stroke::new(border_width, self.border);
 		visuals.widgets.active.fg_stroke = Stroke::new(1.0, self.foreground);
 
 		style.visuals = visuals;
@@ -178,8 +284,9 @@ impl ElegantTheme {
 
 	pub fn get(ctx: &Context) -> Self {
 		ctx.data_mut(|d| {
-			d.get_temp(Id::new("elegant_theme"))
-				.unwrap_or_else(|| ElegantTheme::build(ThemeMode::Light))
+			d.get_temp(Id::new("elegant_theme")).unwrap_or_else(|| {
+				ElegantTheme::build(ThemeMode::Light, MonaspaceFont::Neon)
+			})
 		})
 	}
 }
