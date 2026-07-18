@@ -296,7 +296,7 @@ pub fn is_system_dark_mode() -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn get_os_accent_color() -> Option<Color32> {
+pub fn get_os_accent_color() -> Option<Color32> {
 	use winreg::{RegKey, enums::*};
 	let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 	if let Ok(dwm) = hkcu.open_subkey("Software\\Microsoft\\Windows\\DWM") {

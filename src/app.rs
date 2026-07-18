@@ -9,6 +9,11 @@ pub enum Message {
 
 pub struct AppState {
 	pub sample_input: String,
+	pub selected_tab: usize,
+	pub tags: Vec<String>,
+	pub new_tag: String,
+	pub selected_dropdown: String,
+	pub show_toast: bool,
 }
 
 pub struct FinanceApp {
@@ -45,6 +50,11 @@ impl FinanceApp {
 		Self {
 			state: AppState {
 				sample_input: String::new(),
+				selected_tab: 0,
+				tags: vec!["finance".to_string(), "rust".to_string()],
+				new_tag: String::new(),
+				selected_dropdown: "option1".to_string(),
+				show_toast: false,
 			},
 			tx,
 			rx,
@@ -165,16 +175,12 @@ impl eframe::App for FinanceApp {
 									)
 									.variant(Variant::Info),
 								);
-
-								ui.add_space(8.0);
-								ui.add(
-									Alert::new("Error!", "Something went wrong.")
-										.variant(Variant::Danger),
-								);
 							});
 
 							ui.vertical(|ui| {
-								ui.label(egui::RichText::new("Cards").strong());
+								ui.label(
+									egui::RichText::new("Cards & Accordion").strong(),
+								);
 								ui.add_space(8.0);
 								ui.add(Card::new(
 									"Card Title",
@@ -182,7 +188,22 @@ impl eframe::App for FinanceApp {
 								));
 
 								ui.add_space(16.0);
-								ui.label(egui::RichText::new("Inputs").strong());
+								ElegantAccordion::new("acc1", "Advanced Options").show(
+									ui,
+									|ui| {
+										ui.label(
+											"Here is some hidden content inside the accordion.",
+										);
+									},
+								);
+							});
+							ui.end_row();
+
+							// ROW 3: Inputs, Tags, and Dropdown
+							ui.vertical(|ui| {
+								ui.label(
+									egui::RichText::new("Inputs & Dropdowns").strong(),
+								);
 								ui.add_space(8.0);
 								ui.set_width(300.0);
 								ui.text_input(
@@ -191,8 +212,32 @@ impl eframe::App for FinanceApp {
 								);
 
 								ui.add_space(16.0);
+								ui.label(egui::RichText::new("Tags").strong());
+								ui.add_space(8.0);
+								ui.add(ElegantTagInput::new(
+									&mut self.state.tags,
+									&mut self.state.new_tag,
+								));
+
+								ui.add_space(16.0);
+								ui.label(egui::RichText::new("Dropdown").strong());
+								ui.add_space(8.0);
+								ElegantDropdown::new(
+									"dropdown1",
+									&mut self.state.selected_dropdown,
+								)
+								.options(vec![
+									("option1".to_string(), "Option 1".to_string()),
+									("option2".to_string(), "Option 2".to_string()),
+									("option3".to_string(), "Option 3".to_string()),
+								])
+								.show(ui);
+							});
+
+							ui.vertical(|ui| {
 								ui.label(
-									egui::RichText::new("Progress & Spinners").strong(),
+									egui::RichText::new("Progress, Spinners & Skeleton")
+										.strong(),
 								);
 								ui.add_space(8.0);
 								ui.set_width(300.0);
@@ -200,11 +245,56 @@ impl eframe::App for FinanceApp {
 								ui.add_space(8.0);
 								let theme = ElegantTheme::get(ui.ctx());
 								ui.add(egui::Spinner::new().color(theme.primary));
+
+								ui.add_space(16.0);
+								ui.label(egui::RichText::new("Skeleton").strong());
+								ui.add_space(8.0);
+								ui.add(Skeleton::new(200.0, 24.0));
+								ui.add_space(4.0);
+								ui.add(Skeleton::new(150.0, 16.0));
+							});
+							ui.end_row();
+
+							// ROW 4: Tabs and Toast
+							ui.vertical(|ui| {
+								ui.label(egui::RichText::new("Tabs").strong());
+								ui.add_space(8.0);
+								ui.add(ElegantTabs::new(
+									&["Overview", "Transactions", "Settings"],
+									&mut self.state.selected_tab,
+								));
+								ui.add_space(16.0);
+								ui.label(format!(
+									"Selected Tab Index: {}",
+									self.state.selected_tab
+								));
+							});
+
+							ui.vertical(|ui| {
+								ui.label(
+									egui::RichText::new("Toast Notification").strong(),
+								);
+								ui.add_space(8.0);
+								if ui
+									.add(
+										ElegantButton::new("Show Toast")
+											.variant(Variant::Success),
+									)
+									.clicked()
+								{
+									self.state.show_toast = true;
+								}
 							});
 							ui.end_row();
 						});
 				});
 			});
 		});
+
+		if self.state.show_toast {
+			ElegantToast::new("toast1", "Notification", "This is a toast message!")
+				.variant(Variant::Success)
+				.show(ui.ctx());
+		}
 	}
 }
