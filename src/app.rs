@@ -23,7 +23,7 @@ impl FinanceApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
 		let (tx, rx) = unbounded();
 		let theme_mode = ThemeMode::System;
-		let theme = ElegantTheme::build(theme_mode, MonaspaceFont::Neon);
+		let theme = ElegantTheme::build(theme_mode, MonaspaceFont::Xenon);
 		let is_dark = theme.is_dark;
 		theme.apply(&cc.egui_ctx);
 
