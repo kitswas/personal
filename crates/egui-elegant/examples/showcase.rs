@@ -4,7 +4,7 @@ use egui_elegant::{
 	*,
 };
 use std::{
-	sync::mpsc::{Receiver, Sender, channel},
+	sync::mpsc::{Receiver, channel},
 	time::Duration,
 };
 
@@ -23,7 +23,6 @@ pub struct AppState {
 
 pub struct ShowcaseApp {
 	state: AppState,
-	tx: Sender<Message>,
 	rx: Receiver<Message>,
 	theme_mode: ThemeMode,
 	is_dark: bool,
@@ -61,7 +60,6 @@ impl ShowcaseApp {
 				selected_dropdown: "option1".to_string(),
 				show_toast: false,
 			},
-			tx,
 			rx,
 			theme_mode,
 			is_dark,
@@ -106,170 +104,290 @@ impl eframe::App for ShowcaseApp {
 
 					let mut cards: Vec<Box<dyn FnMut(&mut egui::Ui)>> = vec![
 						Box::new(|ui: &mut egui::Ui| {
-							ui.label(egui::RichText::new("Buttons").strong());
-							ui.add_space(8.0);
-							ui.horizontal_wrapped(|ui| {
-								ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-								ui.add(
-									ElegantButton::new("Primary")
-										.variant(Variant::Primary),
+							Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(ui, |flex| {
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Buttons").strong(),
+									),
 								);
-								ui.add(
-									ElegantButton::new("Secondary")
-										.variant(Variant::Secondary),
-								);
-								ui.add(
-									ElegantButton::new("Danger").variant(Variant::Danger),
-								);
-								ui.add(ElegantButton::new("Outline").outline());
-								ui.add(
-									ElegantButton::new("Danger Outline")
-										.variant(Variant::Danger)
-										.outline(),
-								);
-								ui.add(ElegantButton::new("Ghost").ghost());
+								flex.add_ui(item(), |ui| {
+									ui.horizontal_wrapped(|ui| {
+										ui.spacing_mut().item_spacing =
+											egui::vec2(8.0, 8.0);
+										ui.add(
+											ElegantButton::new("Primary")
+												.variant(Variant::Primary),
+										);
+										ui.add(
+											ElegantButton::new("Secondary")
+												.variant(Variant::Secondary),
+										);
+										ui.add(
+											ElegantButton::new("Danger")
+												.variant(Variant::Danger),
+										);
+										ui.add(ElegantButton::new("Outline").outline());
+										ui.add(
+											ElegantButton::new("Danger Outline")
+												.variant(Variant::Danger)
+												.outline(),
+										);
+										ui.add(ElegantButton::new("Ghost").ghost());
+									});
+								});
 							});
 						}),
 						Box::new(|ui: &mut egui::Ui| {
-							ui.label(egui::RichText::new("Badges & Avatars").strong());
-							ui.add_space(8.0);
-							ui.horizontal_wrapped(|ui| {
-								ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-								ui.add(ElegantBadge::new("Default"));
-								ui.add(
-									ElegantBadge::new("Secondary")
-										.variant(Variant::Secondary),
+							Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(ui, |flex| {
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Badges & Avatars").strong(),
+									),
 								);
-								ui.add(ElegantBadge::new("Outline").outline());
-								ui.add(
-									ElegantBadge::new("Success")
+								flex.add_ui(item(), |ui| {
+									ui.horizontal_wrapped(|ui| {
+										ui.spacing_mut().item_spacing =
+											egui::vec2(8.0, 8.0);
+										ui.add(ElegantBadge::new("Default"));
+										ui.add(
+											ElegantBadge::new("Secondary")
+												.variant(Variant::Secondary),
+										);
+										ui.add(ElegantBadge::new("Outline").outline());
+										ui.add(
+											ElegantBadge::new("Success")
+												.variant(Variant::Success),
+										);
+										ui.add(
+											ElegantBadge::new("Warning")
+												.variant(Variant::Warning),
+										);
+										ui.add(
+											ElegantBadge::new("Danger")
+												.variant(Variant::Danger),
+										);
+										ui.add_space(8.0);
+										ui.add(Avatar::new("JD"));
+									});
+								});
+							});
+						}),
+						Box::new(move |ui: &mut egui::Ui| {
+							Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(ui, |flex| {
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Alerts").strong(),
+									),
+								);
+								flex.add_ui(item(), |ui| {
+									ui.add_sized(
+										egui::vec2(inner_width, 0.0),
+										Alert::new(
+											"Success!",
+											"Your changes have been saved.",
+										)
 										.variant(Variant::Success),
-								);
-								ui.add(
-									ElegantBadge::new("Warning")
+									);
+								});
+								flex.add_ui(item(), |ui| {
+									ui.add_sized(
+										egui::vec2(inner_width, 0.0),
+										Alert::new(
+											"Warning!",
+											"Please review before continuing.",
+										)
 										.variant(Variant::Warning),
-								);
-								ui.add(
-									ElegantBadge::new("Danger").variant(Variant::Danger),
-								);
-								ui.add_space(8.0);
-								ui.add(Avatar::new("JD"));
-							});
-						}),
-						Box::new(|ui: &mut egui::Ui| {
-							ui.label(egui::RichText::new("Alerts").strong());
-							ui.add_space(8.0);
-							ui.add(
-								Alert::new("Success!", "Your changes have been saved.")
-									.variant(Variant::Success),
-							);
-							ui.add_space(8.0);
-							ui.add(
-								Alert::new(
-									"Warning!",
-									"Please review before continuing.",
-								)
-								.variant(Variant::Warning),
-							);
-							ui.add_space(8.0);
-							ui.add(
-								Alert::new("Info", "This is a default alert message.")
-									.variant(Variant::Info),
-							);
-						}),
-						Box::new(|ui: &mut egui::Ui| {
-							ui.label(egui::RichText::new("Cards & Accordion").strong());
-							ui.add_space(8.0);
-							Card::new().show(ui, |ui| {
-								ui.heading("Card Title");
-								ui.add_space(8.0);
-								ui.label("Card description goes here.");
-								ui.add_space(16.0);
-								ui.horizontal_wrapped(|ui| {
-									ui.add(ElegantButton::new("Cancel").ghost());
-									ui.add(
-										ElegantButton::new("Save Changes")
-											.variant(Variant::Primary),
+									);
+								});
+								flex.add_ui(item(), |ui| {
+									ui.add_sized(
+										egui::vec2(inner_width, 0.0),
+										Alert::new(
+											"Info",
+											"This is a default alert message.",
+										)
+										.variant(Variant::Info),
 									);
 								});
 							});
-							ui.add_space(16.0);
-							ElegantAccordion::new("acc1", "Advanced Options").show(
-								ui,
-								|ui| {
-									ui.label("Hidden content inside the accordion.");
-								},
-							);
 						}),
 						Box::new(|ui: &mut egui::Ui| {
-							ui.label(egui::RichText::new("Inputs & Dropdowns").strong());
-							ui.add_space(8.0);
-							ui.text_input(
-								&mut self.state.sample_input,
-								"Enter text here...",
-							);
-							ui.add_space(16.0);
-							ui.label(egui::RichText::new("Tags").strong());
-							ui.add_space(8.0);
-							ui.add(ElegantTagInput::new(
-								&mut self.state.tags,
-								&mut self.state.new_tag,
-							));
-							ui.add_space(16.0);
-							ui.label(egui::RichText::new("Dropdown").strong());
-							ui.add_space(8.0);
-							ElegantDropdown::new(
-								"dropdown1",
-								&mut self.state.selected_dropdown,
-							)
-							.options(vec![
-								("option1".to_string(), "Option 1".to_string()),
-								("option2".to_string(), "Option 2".to_string()),
-								("option3".to_string(), "Option 3".to_string()),
-							])
-							.show(ui);
-						}),
-						Box::new(|ui: &mut egui::Ui| {
-							ui.label(egui::RichText::new("Progress & Skeleton").strong());
-							ui.add_space(8.0);
-							ui.add(Progress::new(0.65));
-							ui.add_space(8.0);
-							let theme = ElegantTheme::get(ui.ctx());
-							ui.add(egui::Spinner::new().color(theme.primary));
-							ui.add_space(16.0);
-							ui.label(egui::RichText::new("Skeleton").strong());
-							ui.add_space(8.0);
-							ui.add(Skeleton::new(200.0, 24.0));
-							ui.add_space(4.0);
-							ui.add(Skeleton::new(150.0, 16.0));
-						}),
-						Box::new(|ui: &mut egui::Ui| {
-							ui.label(egui::RichText::new("Tabs").strong());
-							ui.add_space(8.0);
-							egui::ScrollArea::horizontal().show(ui, |ui| {
-								ui.add(ElegantTabs::new(
-									&["Overview", "Transactions", "Settings"],
-									&mut self.state.selected_tab,
-								));
+							Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(ui, |flex| {
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Cards & Accordion").strong(),
+									),
+								);
+								flex.add_ui(item(), |ui| {
+									Card::new().show(ui, |ui| {
+										Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(
+											ui,
+											|flex| {
+												flex.add(
+													item(),
+													egui::Label::new(
+														egui::RichText::new("Card Title")
+															.heading(),
+													),
+												);
+												flex.add(
+													item(),
+													egui::Label::new(
+														"Card description goes here.",
+													),
+												);
+												flex.add_ui(item(), |ui| {
+													ui.horizontal_wrapped(|ui| {
+														ui.spacing_mut().item_spacing =
+															egui::vec2(8.0, 8.0);
+														ui.add(
+															ElegantButton::new("Cancel")
+																.ghost(),
+														);
+														ui.add(
+															ElegantButton::new(
+																"Save Changes",
+															)
+															.variant(Variant::Primary),
+														);
+													});
+												});
+											},
+										);
+									});
+								});
+								flex.add_ui(item(), |ui| {
+									ElegantAccordion::new("acc1", "Advanced Options")
+										.show(ui, |ui| {
+											ui.label(
+												"Hidden content inside the accordion.",
+											);
+										});
+								});
 							});
-							ui.add_space(16.0);
-							ui.label(format!(
-								"Selected tab: {}",
-								self.state.selected_tab
-							));
 						}),
 						Box::new(|ui: &mut egui::Ui| {
-							ui.label(egui::RichText::new("Toast Notification").strong());
-							ui.add_space(8.0);
-							if ui
-								.add(
-									ElegantButton::new("Show Toast")
-										.variant(Variant::Success),
-								)
-								.clicked()
-							{
-								self.state.show_toast = true;
-							}
+							Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(ui, |flex| {
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Inputs & Dropdowns")
+											.strong(),
+									),
+								);
+								flex.add_ui(item(), |ui| {
+									ui.text_input(
+										&mut self.state.sample_input,
+										"Enter text here...",
+									);
+								});
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Tags").strong(),
+									),
+								);
+								flex.add(
+									item(),
+									ElegantTagInput::new(
+										&mut self.state.tags,
+										&mut self.state.new_tag,
+									),
+								);
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Dropdown").strong(),
+									),
+								);
+								flex.add_ui(item(), |ui| {
+									ElegantDropdown::new(
+										"dropdown1",
+										&mut self.state.selected_dropdown,
+									)
+									.options(vec![
+										("option1".to_string(), "Option 1".to_string()),
+										("option2".to_string(), "Option 2".to_string()),
+										("option3".to_string(), "Option 3".to_string()),
+									])
+									.show(ui);
+								});
+							});
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(ui, |flex| {
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Progress & Skeleton")
+											.strong(),
+									),
+								);
+								flex.add(item(), Progress::new(0.65));
+								flex.add_ui(item(), |ui| {
+									let theme = ElegantTheme::get(ui.ctx());
+									ui.add(egui::Spinner::new().color(theme.primary));
+								});
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Skeleton").strong(),
+									),
+								);
+								flex.add(item(), Skeleton::new(200.0, 24.0));
+								flex.add(item(), Skeleton::new(150.0, 16.0));
+							});
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(ui, |flex| {
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Tabs").strong(),
+									),
+								);
+								flex.add_ui(item(), |ui| {
+									egui::ScrollArea::horizontal().show(ui, |ui| {
+										ui.add(ElegantTabs::new(
+											&["Overview", "Transactions", "Settings"],
+											&mut self.state.selected_tab,
+										));
+									});
+								});
+								flex.add(
+									item(),
+									egui::Label::new(format!(
+										"Selected tab: {}",
+										self.state.selected_tab
+									)),
+								);
+							});
+						}),
+						Box::new(|ui: &mut egui::Ui| {
+							Flex::vertical().gap(egui::vec2(0.0, 8.0)).show(ui, |flex| {
+								flex.add(
+									item(),
+									egui::Label::new(
+										egui::RichText::new("Toast Notification")
+											.strong(),
+									),
+								);
+								flex.add_ui(item(), |ui| {
+									if ui
+										.add(
+											ElegantButton::new("Show Toast")
+												.variant(Variant::Success),
+										)
+										.clicked()
+									{
+										self.state.show_toast = true;
+									}
+								});
+							});
 						}),
 					];
 

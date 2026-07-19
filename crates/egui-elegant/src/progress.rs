@@ -15,10 +15,8 @@ impl egui::Widget for Progress {
 	fn ui(self, ui: &mut egui::Ui) -> egui::Response {
 		let theme = ElegantTheme::get(ui.ctx());
 		let height = 8.0;
-		let width = ui.available_width().max(100.0);
-		let size = egui::vec2(width, height);
-
-		let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+		let (rect, response) =
+			ui.allocate_at_least(egui::vec2(100.0, height), egui::Sense::hover());
 
 		if ui.is_rect_visible(rect) {
 			let painter = ui.painter();
