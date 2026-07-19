@@ -46,3 +46,19 @@ impl<'a> ElegantAccordion<'a> {
 			})
 	}
 }
+
+#[cfg(feature = "flex")]
+impl<'a> ElegantAccordion<'a> {
+	/// Render this accordion as a flex item inside an [`egui_flex::FlexInstance`].
+	///
+	/// Returns `CollapsingResponse<R>` which carries both the open/closed state
+	/// and the body return value (if the accordion is open).
+	pub fn show_flex<R>(
+		self,
+		flex: &mut egui_flex::FlexInstance,
+		item: egui_flex::FlexItem,
+		content: impl FnOnce(&mut egui::Ui) -> R,
+	) -> egui::collapsing_header::CollapsingResponse<R> {
+		flex.add_ui(item, |ui| self.show(ui, content)).inner
+	}
+}

@@ -1,4 +1,7 @@
-use crate::theme::{ElegantTheme, Variant};
+use crate::{
+	theme::{ElegantTheme, Variant},
+	traits::Elegant,
+};
 use egui;
 
 pub struct ElegantBadge<'a> {
@@ -70,3 +73,6 @@ impl<'a> egui::Widget for ElegantBadge<'a> {
 			.response
 	}
 }
+
+impl<'a> Elegant for ElegantBadge<'a> {}
+crate::impl_flex_widget!(ElegantBadge<'a>);

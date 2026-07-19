@@ -12,6 +12,7 @@ mod tabs;
 mod taginput;
 mod theme;
 mod toast;
+mod traits;
 
 pub use accordion::ElegantAccordion;
 pub use alert::Alert;
@@ -30,3 +31,8 @@ pub use theme::{
 	is_system_dark_mode,
 };
 pub use toast::ElegantToast;
+pub use traits::Elegant;
+
+/// Re-export `egui_flex` so consumers don't need a separate direct dependency.
+#[cfg(feature = "flex")]
+pub use egui_flex;

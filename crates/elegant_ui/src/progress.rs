@@ -1,4 +1,4 @@
-use crate::theme::ElegantTheme;
+use crate::{theme::ElegantTheme, traits::Elegant};
 use egui;
 
 pub struct Progress {
@@ -37,3 +37,6 @@ impl egui::Widget for Progress {
 		response
 	}
 }
+
+impl Elegant for Progress {}
+crate::impl_flex_widget!(Progress);

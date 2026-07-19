@@ -1,4 +1,7 @@
-use crate::theme::{ElegantTheme, Variant};
+use crate::{
+	theme::{ElegantTheme, Variant},
+	traits::Elegant,
+};
 use egui;
 
 pub struct ElegantButton<'a> {
@@ -107,3 +110,6 @@ impl<'a> egui::Widget for ElegantButton<'a> {
 		.inner
 	}
 }
+
+impl<'a> Elegant for ElegantButton<'a> {}
+crate::impl_flex_widget!(ElegantButton<'a>);

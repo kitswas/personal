@@ -56,3 +56,15 @@ impl<'a, T: PartialEq + Clone> ElegantDropdown<'a, T> {
 			.response
 	}
 }
+
+#[cfg(feature = "flex")]
+impl<'a, T: PartialEq + Clone> ElegantDropdown<'a, T> {
+	/// Render this dropdown as a flex item inside an [`egui_flex::FlexInstance`].
+	pub fn show_flex(
+		self,
+		flex: &mut egui_flex::FlexInstance,
+		item: egui_flex::FlexItem,
+	) -> egui::Response {
+		flex.add_ui(item, |ui| self.show(ui)).inner
+	}
+}

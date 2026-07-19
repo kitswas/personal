@@ -1,4 +1,4 @@
-use crate::theme::ElegantTheme;
+use crate::{theme::ElegantTheme, traits::Elegant};
 use egui;
 
 pub struct Avatar<'a> {
@@ -31,3 +31,6 @@ impl<'a> egui::Widget for Avatar<'a> {
 		response
 	}
 }
+
+impl<'a> Elegant for Avatar<'a> {}
+crate::impl_flex_widget!(Avatar<'a>);

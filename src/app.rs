@@ -1,7 +1,9 @@
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use eframe::egui;
-use egui_flex::{Flex, item};
-use elegant_ui::*;
+use elegant_ui::{
+	egui_flex::{Flex, item},
+	*,
+};
 use std::time::Duration;
 
 pub enum Message {
@@ -273,12 +275,10 @@ impl eframe::App for FinanceApp {
 						.gap(egui::vec2(GRID_GAP, GRID_GAP))
 						.show(ui, |flex| {
 							for card_fn in &mut cards {
-								flex.add_ui(item(), |ui| {
-									Card::new().show(ui, |ui| {
-										ui.set_min_width(inner_width);
-										ui.set_max_width(inner_width);
-										card_fn(ui);
-									});
+								Card::new().show_flex(flex, item(), |ui| {
+									ui.set_min_width(inner_width);
+									ui.set_max_width(inner_width);
+									card_fn(ui);
 								});
 							}
 						});

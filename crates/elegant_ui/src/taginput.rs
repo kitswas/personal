@@ -1,6 +1,7 @@
 use crate::{
 	badge::ElegantBadge,
 	theme::{ElegantTheme, Variant},
+	traits::Elegant,
 };
 use egui;
 
@@ -58,3 +59,6 @@ impl<'a> egui::Widget for ElegantTagInput<'a> {
 		response.unwrap()
 	}
 }
+
+impl<'a> Elegant for ElegantTagInput<'a> {}
+crate::impl_flex_widget!(ElegantTagInput<'a>);

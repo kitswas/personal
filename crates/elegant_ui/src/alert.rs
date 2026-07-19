@@ -1,4 +1,7 @@
-use crate::theme::{ElegantTheme, Variant};
+use crate::{
+	theme::{ElegantTheme, Variant},
+	traits::Elegant,
+};
 use egui;
 
 pub struct Alert<'a> {
@@ -61,3 +64,11 @@ impl<'a> egui::Widget for Alert<'a> {
 		response
 	}
 }
+
+impl<'a> Elegant for Alert<'a> {
+	/// Alerts should have a minimum width so they don't collapse too narrow.
+	fn flex_default_min_width() -> Option<f32> {
+		Some(240.0)
+	}
+}
+crate::impl_flex_widget!(Alert<'a>);

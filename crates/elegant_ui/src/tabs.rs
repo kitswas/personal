@@ -1,4 +1,4 @@
-use crate::theme::ElegantTheme;
+use crate::{theme::ElegantTheme, traits::Elegant};
 use egui;
 
 pub struct ElegantTabs<'a> {
@@ -94,3 +94,6 @@ impl<'a> egui::Widget for ElegantTabs<'a> {
 		res
 	}
 }
+
+impl<'a> Elegant for ElegantTabs<'a> {}
+crate::impl_flex_widget!(ElegantTabs<'a>);

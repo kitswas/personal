@@ -1219,6 +1219,7 @@ version = "0.1.0"
 dependencies = [
  "dark-light",
  "egui",
+ "egui_flex",
  "winreg 0.56.0",
 ]
 
@@ -2883,7 +2884,6 @@ dependencies = [
  "csv",
  "eframe",
  "egui",
- "egui_flex",
  "elegant_ui",
  "keyring",
  "regex",

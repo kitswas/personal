@@ -1,4 +1,4 @@
-use crate::theme::ElegantTheme;
+use crate::{theme::ElegantTheme, traits::Elegant};
 use egui;
 
 pub struct Skeleton {
@@ -66,3 +66,6 @@ impl egui::Widget for Skeleton {
 		response
 	}
 }
+
+impl Elegant for Skeleton {}
+crate::impl_flex_widget!(Skeleton);
