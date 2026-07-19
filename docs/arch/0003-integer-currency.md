@@ -41,7 +41,7 @@ knows the correct scale factor to apply when displaying amounts.
 amount INTEGER NOT NULL   -- paise (for INR), cents (for USD), etc.
 ```
 
-The Rust backend always works with `i64`. The egui frontend converts for display:
+The Rust backend always works with `i64`. The iced frontend converts for display:
 
 ```rust
 // Pure function — no mutation

@@ -22,7 +22,7 @@ Code requires understanding, testing, maintaining, and debugging.
 Respect the Unidirectional Data Flow pattern.
 
 - **State (`state.rs`):** Pure state management. Holds `AppState`, `Message`, and `Command` enums. Transitions state via a pure `apply_message` function.
-- **UI (`app.rs`):** Strictly for immediate-mode GUI projection using `egui`. It takes an immutable reference to `AppState` and a message transmitter. It MUST NEVER mutate state directly.
+- **UI (`app.rs`):** Strictly for retained-mode GUI projection using `iced` and The Elm Architecture. It takes an immutable reference to `AppState` and a message transmitter. It MUST NEVER mutate state directly.
 - **Async Runtime:** Side effects (like `LoadData`, DB queries) are emitted as `Command`s. They are spawned in Tokio background tasks and their results are piped back to the main thread as `Message`s via channels.
 
 ## 5. Total Correctness & Functional Patterns
@@ -79,7 +79,7 @@ The developer experience must be completely frictionless. Ensure that build scri
 
 ## 13. Directory Map & Restricted Zones
 
-- `src/` — Pure Rust application code (egui Frontend + Backend logic).
+- `src/` — Pure Rust application code (iced Frontend + Backend logic).
 - `docs/arch/` — Architecture Decision Records (ADRs).
 - **Restricted:** Do not modify lockfiles (`Cargo.lock`), third-party vendored code, or this `AGENTS.md` file unless explicitly instructed.
 

@@ -45,18 +45,18 @@ matches the interaction model of desktop-native finance apps.
 
 ## Decision
 
-Use a **three-pane layout** implemented with `egui`'s native layout panels:
+Use a **three-pane layout** implemented with `iced`'s native flexbox model:
 
-- **Left Nav:** `egui::SidePanel::left("nav_panel").exact_width(width * 0.3)`
-- **Right Detail:** `egui::SidePanel::right("detail_panel").exact_width(width * 0.3)`
-- **Center List:** `egui::CentralPanel::default()` (automatically fills the remaining ~40% space).
+- **Left Nav:** `container(...).width(Length::FillPortion(3))`
+- **Right Detail:** `container(...).width(Length::FillPortion(3))`
+- **Center List:** `container(...).width(Length::FillPortion(4))` (automatically fills the remaining ~40% space).
 
 ### Responsive collapse strategy
 
 The layout collapses progressively by checking `ui.available_width()` dynamically during the render loop.
 
-- Wide `> 1024px`: Render all three panels.
-- Medium `640–1024px`: Render Nav and Central, but render the Detail panel as an `egui::Window` (floating modal) or collapse the Nav pane.
+- Wide `> 1024px`: Render all three panes.
+- Medium `640–1024px`: Render Nav and Central, but render the Detail pane as an overlay modal or collapse the Nav pane.
 - Narrow `< 640px`: Render a single Central pane with a top/bottom navigation bar.
 
 ### Empty state of the detail pane
@@ -70,6 +70,6 @@ The detail pane is **never blank**. When nothing is selected:
 ## Consequences
 
 - **Good:** Maximum information density on wide desktop screens.
-- **Good:** Implemented entirely in Rust via pure `egui` immediate mode layout logic, avoiding CSS and DOM completely.
+- **Good:** Implemented entirely in Rust via pure `iced` flexbox layout logic, avoiding CSS and DOM completely.
 - **Good:** The right pane acts as a contextual action surface, reducing popup dialogs.
-- **Trade-off:** `egui` panels must be requested in a specific order (SidePanels before CentralPanel) to allocate space correctly.
+- **Trade-off:** UI components must be nested correctly within `row!` and `column!` macros to allocate space.

@@ -1,99 +1,82 @@
-use eframe::egui;
-use egui_elegant::*;
-use std::{
-	sync::mpsc::{Receiver, Sender, channel},
-	time::Duration,
+use crate::sankey::SankeyDiagram;
+use iced::{
+	Element, Length, Task, Theme,
+	widget::{button, column, container, row, text},
 };
 
+#[derive(Debug, Clone)]
 pub enum Message {
-	ThemeChanged(bool),
-}
-
-pub struct AppState {
-	// Add app state fields here
+	SankeyNodeClicked(String),
+	ToggleTheme,
+	// other domain messages...
 }
 
 pub struct FinanceApp {
-	state: AppState,
-	tx: Sender<Message>,
-	rx: Receiver<Message>,
-	theme_mode: ThemeMode,
-	is_dark: bool,
+	sankey: SankeyDiagram,
+	theme: Theme,
 }
 
-impl FinanceApp {
-	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-		let (tx, rx) = channel();
-		let theme_mode = ThemeMode::System;
-		let theme = ElegantTheme::build(theme_mode, MonaspaceFont::Xenon);
-		let is_dark = theme.is_dark;
-		theme.apply(&cc.egui_ctx);
-
-		let tx_clone = tx.clone();
-		let ctx_clone = cc.egui_ctx.clone();
-		std::thread::spawn(move || {
-			let mut last_is_dark = is_dark;
-			loop {
-				std::thread::sleep(Duration::from_secs(1));
-				let current_is_dark = is_system_dark_mode();
-				if current_is_dark != last_is_dark {
-					last_is_dark = current_is_dark;
-					let _ = tx_clone.send(Message::ThemeChanged(current_is_dark));
-					ctx_clone.request_repaint();
-				}
-			}
-		});
-
+impl Default for FinanceApp {
+	fn default() -> Self {
 		Self {
-			state: AppState {},
-			tx,
-			rx,
-			theme_mode,
-			is_dark,
+			sankey: SankeyDiagram::new(),
+			theme: Theme::Dark, /* Will eventually load from unencrypted local config
+			                     * per ADR-0008 */
 		}
 	}
 }
 
-impl eframe::App for FinanceApp {
-	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-		while let Ok(msg) = self.rx.try_recv() {
-			match msg {
-				Message::ThemeChanged(is_dark) => {
-					if self.theme_mode == ThemeMode::System {
-						self.is_dark = is_dark;
-						let theme =
-							ElegantTheme::build(ThemeMode::System, MonaspaceFont::Neon);
-						theme.apply(ui.ctx());
-					}
-				},
-			}
+impl FinanceApp {
+	pub fn update(&mut self, message: Message) -> Task<Message> {
+		match message {
+			Message::SankeyNodeClicked(node_id) => {
+				println!("Node clicked: {}", node_id);
+				Task::none()
+			},
+			Message::ToggleTheme => {
+				self.theme = if self.theme == Theme::Dark {
+					Theme::Light
+				} else {
+					Theme::Dark
+				};
+				Task::none()
+			},
 		}
+	}
 
-		// In egui 0.35, eframe gives you a central Ui.
-		// If you want a left panel layout, you can use ui.horizontal.
-		// For a true SidePanel, you'd need the context, but let's just draw on the
-		// provided ui.
-		ui.horizontal(|ui| {
-			// Left side panel mockup
-			ui.vertical(|ui| {
-				ui.set_width(200.0);
-				ui.add_space(24.0);
-				ui.heading("Personal Finance");
-				ui.add_space(16.0);
-				ui.add(ElegantButton::new("Dashboard").ghost());
-				ui.add(ElegantButton::new("Transactions").ghost());
-				ui.add(ElegantButton::new("Accounts").ghost());
-			});
+	pub fn view(&self) -> Element<Message> {
+		// ADR-0007: Three-pane layout (30-40-30)
+		let nav_pane = container(
+			column![text("Nav (30%)").size(24), button("Dashboard"),].spacing(16),
+		)
+		.width(Length::FillPortion(3))
+		.padding(24);
 
-			ui.separator();
+		let list_pane = container(
+			column![
+				text("List (40%)").size(24),
+				button("Toggle Theme").on_press(Message::ToggleTheme),
+				self.sankey.view(),
+			]
+			.spacing(16),
+		)
+		.width(Length::FillPortion(4))
+		.padding(24);
 
-			// Main content mockup
-			ui.vertical(|ui| {
-				ui.add_space(24.0);
-				ui.heading("Dashboard");
-				ui.add_space(16.0);
-				ui.label("Welcome to your local-first personal finance app.");
-			});
-		});
+		let detail_pane = container(
+			column![
+				text("Detail (30%)").size(24),
+				text("Contextual action surface..."),
+			]
+			.spacing(16),
+		)
+		.width(Length::FillPortion(3))
+		.padding(24);
+
+		row![nav_pane, list_pane, detail_pane].into()
+	}
+
+	pub fn theme(&self) -> Theme {
+		self.theme.clone()
 	}
 }

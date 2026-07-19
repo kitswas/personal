@@ -1,6 +1,6 @@
 # Local-First Personal Finance App
 
-A local-first, crash-proof desktop application built with pure Rust and `egui` for robust double-entry accounting. Targets non-US/EU users by prioritizing fault-tolerant Excel/CSV import over API scraping. All financial data is encrypted at rest.
+A local-first, crash-proof desktop application built with pure Rust and `iced` for robust double-entry accounting. Targets non-US/EU users by prioritizing fault-tolerant Excel/CSV import over API scraping. All financial data is encrypted at rest.
 
 ## Recommended IDE Setup
 
@@ -9,16 +9,19 @@ A local-first, crash-proof desktop application built with pure Rust and `egui` f
 ## Commands
 
 To get started, run:
+
 ```bash
 cargo build
 ```
 
 For Desktop development, run:
+
 ```bash
 cargo run
 ```
 
 To run tests:
+
 ```bash
 cargo test
 ```

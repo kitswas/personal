@@ -4,15 +4,15 @@
 
 ## Overview
 
-A local-first, crash-proof desktop application built with pure Rust and `egui` for robust double-entry accounting. Targets non-US/EU users by prioritising fault-tolerant Excel/CSV import over API scraping. All financial data is encrypted at rest; the master key never touches the disk.
+A local-first, crash-proof desktop application built with pure Rust and `iced` for robust double-entry accounting. Targets non-US/EU users by prioritising fault-tolerant Excel/CSV import over API scraping. All financial data is encrypted at rest; the master key never touches the disk.
 
 **Stack (locked):**
 
 | Layer             | Choice                                             | Reason                                             |
 | ----------------- | -------------------------------------------------- | -------------------------------------------------- |
-| Runtime           | Native Desktop (eframe)                            | High performance native execution                  |
-| Frontend          | egui                                               | Immediate mode GUI, single binary footprint        |
-| Styling           | egui themes                                        | Built-in theming, fast rendering                   |
+| Runtime           | Native Desktop                                     | High performance native execution                  |
+| Frontend          | iced                                               | Retained-mode GUI, The Elm Architecture, single binary footprint |
+| Styling           | iced themes                                        | Built-in theming, fast rendering                   |
 | Backend           | Rust                                               | Memory-safe systems language                       |
 | DB                | SQLite encrypted via SQLCipher                     | Full-page AES-256 encryption at rest               |
 | Encryption driver | `rusqlite` with `bundled-sqlcipher`                | Requires external OpenSSL/LibreSSL to be installed |
@@ -60,7 +60,7 @@ The system is strictly layered. UI is decoupled from the core business logic. We
 |  +------------------------------------------------------+  |
 |                             |                              |
 |  +------------------------------------------------------+  |
-|  |              egui Desktop Frontend                   |  |
+|  |              iced Desktop Frontend                   |  |
 |  |                                                      |  |
 |  |  Consumes domain interfaces for interaction          |  |
 |  +------------------------------------------------------+  |
@@ -132,4 +132,4 @@ CREATE INDEX idx_txn_date         ON transactions(date);
 
 ### Phase 5 — UI Construction
 
-**Goal:** Hook the heavily tested backend to the `eframe`/`egui` frontend. Ensure premium aesthetic (no generic grey/black themes) and performant immediate mode rendering.
+**Goal:** Hook the heavily tested backend to the `iced` frontend. Ensure premium aesthetic (no generic grey/black themes) and performant retained-mode GUI rendering using The Elm Architecture.

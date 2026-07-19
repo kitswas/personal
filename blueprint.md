@@ -4,10 +4,10 @@
 
 ## 1. ARCHITECTURE & TECH STACK
 
-This application relies on a strict separation of concerns. The pure Rust stack acts as an "iron-clad sandbox" that absorbs malformed data and protects the encrypted SQLite database, while the `egui` frontend provides a high-density, fluid native UI.
+This application relies on a strict separation of concerns. The pure Rust stack acts as an "iron-clad sandbox" that absorbs malformed data and protects the encrypted SQLite database, while the `iced` frontend provides a high-density, fluid native UI.
 
 - **Runtime:** Native Rust Executable
-- **Frontend Framework:** `egui` (Immediate Mode GUI)
+- **Frontend Framework:** `iced` (Retained-Mode GUI, The Elm Architecture)
 - **Database:** SQLite (embedded, local, row-based OLTP) encrypted via `sqlcipher`.
 - **Package Manager:** `cargo`
 - **Key Rust Crates:** `eframe`, `tokio`, `calamine` (Excel), `csv`, `sqlx` (Compile-time SQL), `serde`, `regex`, `keyring` (OS Keystore), `sqlcipher`.
@@ -15,7 +15,7 @@ This application relies on a strict separation of concerns. The pure Rust stack 
 ### 1.1 Frontend Architecture
 
 - **State:** Deterministic, unidirectional state machine.
-- **Rendering:** `egui` immediate mode drawing loops purely projected from immutable state.
+- **Rendering:** `iced` Elm Architecture views purely projected from immutable state. Uses `iced::widget::canvas` for data visualization.
 - **Side Effects:** Asynchronous tasks run on `tokio` and resolve to state `Message` updates.
 
 ### 1.2 System Architecture Diagram
@@ -28,7 +28,7 @@ graph TD
         end
 
         subgraph RustApp [Rust Desktop Application]
-            subgraph Frontend [egui Frontend]
+            subgraph Frontend [iced Frontend]
                 UI[UI Components & Layout]
                 Charts[Native Data Viz]
             end
@@ -144,18 +144,18 @@ pub enum ParsedRow {
 
 ```
 
-## 5. UI/UX SPECIFICATION (egui Desktop Native)
+## 5. UI/UX SPECIFICATION (iced Desktop Native)
 
-The UI must be entirely fluid and responsive, rendered via `egui` panels and layouts.
+The UI must be entirely fluid and responsive, rendered via `iced` flexbox layouts.
 
-- **Global Layout:** Uses `egui::CentralPanel` and side panels for dynamic resizing.
-- **Triage Data Grid:** UI renders `Vec<ParsedRow>` using `egui_extras::TableBuilder`. Invalid rows are highlighted for human-in-the-loop correction.
+- **Global Layout:** Uses `iced` `row!` and `column!` with flex portions for dynamic resizing.
+- **Triage Data Grid:** UI renders `Vec<ParsedRow>` using Iced's layout primitives. Invalid rows are highlighted for human-in-the-loop correction.
 
 ## 6. REJECTED ARCHITECTURES & REFERENCES
 
 To maintain the project's focus, the following technologies were explicitly evaluated and rejected:
 
-- **Tauri & Web Frameworks (SolidJS/React):** Initially considered but replaced to achieve the absolute smallest binary footprint and fastest native UI via pure Rust and `egui`.
+- **Tauri & Web Frameworks (SolidJS/React):** Initially considered but replaced to achieve the absolute smallest binary footprint and fastest native UI via pure Rust and `iced`.
 - **npm/yarn/pnpm:** Disallowed. Only `cargo` is permitted.
 - **TigerBeetle & hledger:** Dual-database sync architectures cause fragile race conditions. Rejected for pure local SQLite.
 - **Account Aggregator APIs & ML Models:** Cloud dependencies and binary bloat rejected in favor of local parsing and statistics.

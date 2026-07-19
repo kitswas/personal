@@ -8,15 +8,16 @@
 mod app;
 mod domain;
 mod infrastructure;
+mod sankey;
 
 use app::FinanceApp;
 
-#[tokio::main]
-async fn main() -> eframe::Result<()> {
-	let native_options = eframe::NativeOptions::default();
-	eframe::run_native(
-		"Personal Finance",
-		native_options,
-		Box::new(|cc| Ok(Box::new(FinanceApp::new(cc)))),
-	)
+fn main() -> iced::Result {
+	iced::application(FinanceApp::default, FinanceApp::update, FinanceApp::view)
+		.theme(FinanceApp::theme)
+		.window(iced::window::Settings {
+			// we can customize window here if we need
+			..Default::default()
+		})
+		.run()
 }

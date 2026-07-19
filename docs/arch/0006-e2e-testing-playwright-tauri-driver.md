@@ -2,12 +2,12 @@
 
 - **Date:** 2026-07-08
 - **Status:** Accepted
-- **Note:** Originally "Playwright via tauri-driver" before architecture pivot to pure Rust `egui`.
+- **Note:** Originally "Playwright via tauri-driver" before architecture pivot to pure Rust `iced`.
 
 ## Context
 
 Prior to the pure Rust pivot, we considered using Playwright and `tauri-driver`.
-However, an `egui` native desktop application does not run in a webview, meaning Web technologies (Playwright/WebDriver) are incompatible.
+However, an `iced` native desktop application does not run in a webview, meaning Web technologies (Playwright/WebDriver) are incompatible.
 
 Options considered for native GUI testing:
 
@@ -22,10 +22,10 @@ Options considered for native GUI testing:
 We adopt a two-layered testing approach:
 
 1. **Pure State Machine Unit Tests:**
-Because the application strictly follows Unidirectional Data Flow, the core logic is entirely independent of `egui`. We write unit tests that feed `Message` enumerations into the `apply_message` function and assert that the resulting `AppState` matches expectations.
+Because the application strictly follows Unidirectional Data Flow, the core logic is entirely independent of `iced`. We write unit tests that feed `Message` enumerations into the `apply_message` function and assert that the resulting `AppState` matches expectations.
 
 2. **Accesskit Validation:**
-For integration testing, we use `egui`'s built-in `accesskit` integration to programmatically query the semantic accessibility tree. This allows us to ensure UI elements are rendered properly without needing a flaky webdriver or OCR.
+For integration testing, we use `iced`'s built-in `accesskit` integration to programmatically query the semantic accessibility tree. This allows us to ensure UI elements are rendered properly without needing a flaky webdriver or OCR.
 
 ## Consequences
 

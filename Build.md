@@ -1,6 +1,6 @@
 # Building the Application
 
-This project uses a pure Rust stack with `egui` for the frontend and a custom SQLite encryption driver (SQLCipher) for the backend database.
+This project uses a pure Rust stack with `iced` for the frontend and a custom SQLite encryption driver (SQLCipher) for the backend database.
 
 ## 1. Prerequisites
 

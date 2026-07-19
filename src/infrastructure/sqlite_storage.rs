@@ -2,7 +2,7 @@ use crate::domain::{
 	models::{Account, AccountType, Posting, Transaction},
 	storage::{Storage, StorageError},
 };
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 use std::path::PathBuf;
 
 pub struct SqliteStorage {
