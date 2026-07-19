@@ -4,18 +4,11 @@ version = "0.1.0"
 edition = "2024"
 description = "A beautiful, minimal, and elegant UI component library for egui"
 license = "MIT"
-repository = "https://github.com/kitswas/personal"
+repository = "https://github.com/kitswas/egui-elegant"
 readme = "README.md"
 keywords = ["egui", "gui", "ui", "components", "theme"]
 categories = ["gui"]
-exclude = [
-	".github/",
-	".gitignore",
-	"assets/argon.ttf",
-	"assets/krypton.ttf",
-	"assets/radon.ttf",
-	"assets/xenon.ttf",
-]
+exclude = [".github/", ".gitignore"]
 
 [dependencies]
 dark-light = "2.0.0"
