@@ -43,7 +43,7 @@ pub use skeleton::Skeleton;
 pub use tabs::ElegantTabs;
 pub use taginput::ElegantTagInput;
 pub use theme::{
-	ElegantTheme, MonaspaceFont, ThemeMode, Variant, get_os_accent_color,
+	ElegantFont, ElegantTheme, MonaspaceFont, ThemeMode, Variant, get_os_accent_color,
 	is_system_dark_mode,
 };
 pub use toast::ElegantToast;

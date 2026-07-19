@@ -41,6 +41,25 @@ impl Default for MonaspaceFont {
 	}
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ElegantFont {
+	Monaspace(MonaspaceFont),
+	#[cfg(feature = "noto")]
+	Noto,
+}
+
+impl Default for ElegantFont {
+	fn default() -> Self {
+		Self::Monaspace(MonaspaceFont::default())
+	}
+}
+
+impl From<MonaspaceFont> for ElegantFont {
+	fn from(font: MonaspaceFont) -> Self {
+		Self::Monaspace(font)
+	}
+}
+
 pub fn tint_color(color: Color32, factor: f32) -> Color32 {
 	let r = color.r() as f32;
 	let g = color.g() as f32;
@@ -114,7 +133,7 @@ pub struct ElegantTheme {
 	pub danger: Color32,
 	pub info: Color32,
 	pub is_dark: bool,
-	pub font: MonaspaceFont,
+	pub font: ElegantFont,
 	pub spacing: SpacingConfig,
 }
 
@@ -146,7 +165,8 @@ impl ElegantTheme {
 		}
 	}
 
-	pub fn build(mode: ThemeMode, font: MonaspaceFont) -> Self {
+	pub fn build(mode: ThemeMode, font: impl Into<ElegantFont>) -> Self {
+		let font = font.into();
 		let is_dark = match mode {
 			ThemeMode::Dark => true,
 			ThemeMode::Light => false,
@@ -196,33 +216,87 @@ impl ElegantTheme {
 		}
 	}
 
-	pub fn apply(&self, ctx: &Context) {
-		ctx.data_mut(|d| d.insert_temp(Id::new("elegant_theme"), self.clone()));
-
-		let font_bytes = match self.font {
-			MonaspaceFont::Argon => include_bytes!("../assets/argon.ttf").as_slice(),
-			MonaspaceFont::Krypton => include_bytes!("../assets/krypton.ttf").as_slice(),
-			MonaspaceFont::Neon => include_bytes!("../assets/neon.ttf").as_slice(),
-			MonaspaceFont::Radon => include_bytes!("../assets/radon.ttf").as_slice(),
-			MonaspaceFont::Xenon => include_bytes!("../assets/xenon.ttf").as_slice(),
-		};
-
+	pub fn font_definitions(&self) -> FontDefinitions {
 		let mut fonts = FontDefinitions::default();
-		fonts.font_data.insert(
-			"elegant_font".to_owned(),
-			std::sync::Arc::new(FontData::from_static(font_bytes)),
-		);
+
+		match self.font {
+			ElegantFont::Monaspace(mf) => {
+				let font_bytes = match mf {
+					MonaspaceFont::Argon => {
+						include_bytes!("../assets/argon.ttf").as_slice()
+					},
+					MonaspaceFont::Krypton => {
+						include_bytes!("../assets/krypton.ttf").as_slice()
+					},
+					MonaspaceFont::Neon => {
+						include_bytes!("../assets/neon.ttf").as_slice()
+					},
+					MonaspaceFont::Radon => {
+						include_bytes!("../assets/radon.ttf").as_slice()
+					},
+					MonaspaceFont::Xenon => {
+						include_bytes!("../assets/xenon.ttf").as_slice()
+					},
+				};
+				fonts.font_data.insert(
+					"elegant_font".to_owned(),
+					std::sync::Arc::new(FontData::from_static(font_bytes)),
+				);
+				fonts
+					.families
+					.entry(FontFamily::Proportional)
+					.or_default()
+					.insert(0, "elegant_font".to_owned());
+				fonts
+					.families
+					.entry(FontFamily::Monospace)
+					.or_default()
+					.insert(0, "elegant_font".to_owned());
+			},
+			#[cfg(feature = "noto")]
+			ElegantFont::Noto => {
+				let downloaded_fonts = noto_fonts_dl::load_fonts();
+				for (name, data) in downloaded_fonts {
+					fonts.font_data.insert(
+						name.clone(),
+						std::sync::Arc::new(FontData::from_owned(data.clone())),
+					);
+					fonts
+						.families
+						.entry(FontFamily::Proportional)
+						.or_default()
+						.push(name.clone());
+					fonts
+						.families
+						.entry(FontFamily::Monospace)
+						.or_default()
+						.push(name.clone());
+				}
+
+				// Provide Neon as the monospace fallback when Noto is used
+				let neon_bytes = include_bytes!("../assets/neon.ttf").as_slice();
+				fonts.font_data.insert(
+					"elegant_mono".to_owned(),
+					std::sync::Arc::new(FontData::from_static(neon_bytes)),
+				);
+				fonts
+					.families
+					.entry(FontFamily::Monospace)
+					.or_default()
+					.insert(0, "elegant_mono".to_owned());
+			},
+		}
+
 		fonts
-			.families
-			.entry(FontFamily::Proportional)
-			.or_default()
-			.insert(0, "elegant_font".to_owned());
-		fonts
-			.families
-			.entry(FontFamily::Monospace)
-			.or_default()
-			.insert(0, "elegant_font".to_owned());
-		ctx.set_fonts(fonts);
+	}
+
+	pub fn apply(&self, ctx: &Context) {
+		ctx.set_fonts(self.font_definitions());
+		self.apply_visuals(ctx);
+	}
+
+	pub fn apply_visuals(&self, ctx: &Context) {
+		ctx.data_mut(|d| d.insert_temp(Id::new("elegant_theme"), self.clone()));
 
 		let mut style = (*ctx.style_of(if self.is_dark {
 			egui::Theme::Dark

@@ -2,16 +2,32 @@
 name = "egui-elegant"
 version = "0.1.0"
 edition = "2024"
-description = "A beautiful, modern, and elegant UI component library for egui"
+description = "A beautiful, minimal, and elegant UI component library for egui"
+license = "MIT"
+repository = "https://github.com/kitswas/personal"
+readme = "README.md"
+keywords = ["egui", "gui", "ui", "components", "theme"]
+categories = ["gui"]
+exclude = [
+	".github/",
+	".gitignore",
+	"assets/argon.ttf",
+	"assets/krypton.ttf",
+	"assets/radon.ttf",
+	"assets/xenon.ttf",
+]
 
 [dependencies]
 dark-light = "2.0.0"
 egui = "0.35"
 egui_flex = { version = "0.7.0", optional = true }
+noto-fonts-dl = { version = "0.1.2", optional = true }
 winreg = "0.56.0"
 
 [features]
 flex = ["dep:egui_flex"]
+noto = ["dep:noto-fonts-dl"]
 
 [dev-dependencies]
 eframe = "0.35"
+noto-fonts-dl = { version = "0.1.2", features = ["hi", "bn"] }
