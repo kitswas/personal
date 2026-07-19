@@ -1,10 +1,12 @@
-use crossbeam_channel::{Receiver, Sender, unbounded};
 use eframe::egui;
 use egui_elegant::{
 	egui_flex::{Flex, item},
 	*,
 };
-use std::time::Duration;
+use std::{
+	sync::mpsc::{Receiver, Sender, channel},
+	time::Duration,
+};
 
 pub enum Message {
 	ThemeChanged(bool),
@@ -29,7 +31,7 @@ pub struct ShowcaseApp {
 
 impl ShowcaseApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-		let (tx, rx) = unbounded();
+		let (tx, rx) = channel();
 		let theme_mode = ThemeMode::System;
 		let theme = ElegantTheme::build(theme_mode, MonaspaceFont::Xenon);
 		let is_dark = theme.is_dark;

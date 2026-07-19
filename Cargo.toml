@@ -9,7 +9,6 @@ edition = "2024"
 members = ["crates/*"]
 
 [dependencies]
-crossbeam-channel = "0.5"
 eframe = "0.35"
 egui = "0.35"
 egui-elegant = { path = "crates/egui-elegant", features = ["flex"] }

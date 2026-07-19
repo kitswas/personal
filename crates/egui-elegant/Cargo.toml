@@ -15,4 +15,3 @@ flex = ["dep:egui_flex"]
 
 [dev-dependencies]
 eframe = "0.35"
-crossbeam-channel = "0.5"
