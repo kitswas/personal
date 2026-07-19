@@ -11,7 +11,7 @@ fn main() -> eframe::Result<()> {
 		"Noto Multilingual Example",
 		options,
 		Box::new(|cc| {
-			let theme = ElegantTheme::build(ThemeMode::Dark, ElegantFont::Noto);
+			let theme = ElegantTheme::build(ThemeMode::System, ElegantFont::Noto);
 			theme.apply(&cc.egui_ctx);
 			Ok(Box::new(MultilingualApp {}))
 		}),

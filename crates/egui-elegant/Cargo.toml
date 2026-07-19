@@ -31,3 +31,11 @@ noto = ["dep:noto-fonts-dl"]
 [dev-dependencies]
 eframe = "0.35"
 noto-fonts-dl = { version = "0.1.2", features = ["hi", "bn"] }
+
+[[example]]
+name = "noto_multilingual"
+required-features = ["noto"]
+
+[[example]]
+name = "showcase"
+required-features = ["flex"]
