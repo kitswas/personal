@@ -12,7 +12,7 @@ members = ["crates/*"]
 crossbeam-channel = "0.5"
 eframe = "0.35"
 egui = "0.35"
-elegant_ui = { path = "crates/elegant_ui", features = ["flex"] }
+egui-elegant = { path = "crates/egui-elegant", features = ["flex"] }
 serde = { version = "1.0", features = ["derive"] }
 # Async runtime
 tokio = { version = "1.53", features = ["full"] }

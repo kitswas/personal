@@ -1,3 +1,19 @@
+//! # egui-elegant
+//!
+//! A beautiful, modern, and elegant UI component library for `egui`.
+//!
+//! This crate provides a suite of ready-to-use widgets and a theming engine
+//! that make it easy to build stunning immediate-mode GUIs in Rust.
+//!
+//! ## Features
+//! - **Theming**: See [`theme::ElegantTheme`] for setting up dark/light modes and colors.
+//! - **Components**: Buttons, Badges, Cards, Accordions, Alerts, Dropdowns, Inputs,
+//!   Progress Bars, Skeletons, and Tabs.
+//! - **Flex Layouts**: Enable the `flex` feature to seamlessly integrate with
+//!   `egui_flex`.
+//!
+//! Every leaf component implements the [`traits::Elegant`] trait.
+
 mod accordion;
 mod alert;
 mod avatar;

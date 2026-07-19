@@ -1,6 +1,6 @@
 use crate::{
 	badge::ElegantBadge,
-	theme::{ElegantTheme, Variant},
+	theme::Variant,
 	traits::Elegant,
 };
 use egui;
@@ -35,7 +35,6 @@ impl<'a> egui::Widget for ElegantTagInput<'a> {
 				self.tags.remove(i);
 			}
 
-			let theme = ElegantTheme::get(ui.ctx());
 			let input_resp = ui.add(
 				egui::TextEdit::singleline(self.current_text)
 					.hint_text("Add a tag...")
