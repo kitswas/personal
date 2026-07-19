@@ -79,6 +79,7 @@ pub struct SpacingConfig {
 	pub badge_corner_radius: f32,
 	pub card_inner_margin: f32,
 	pub alert_inner_margin: f32,
+	pub alert_min_width: f32,
 	pub input_inner_margin: egui::Vec2,
 	pub border_width: f32,
 }
@@ -94,6 +95,7 @@ impl Default for SpacingConfig {
 			badge_corner_radius: 12.0,
 			card_inner_margin: 24.0,
 			alert_inner_margin: 16.0,
+			alert_min_width: 240.0,
 			input_inner_margin: egui::vec2(12.0, 8.0),
 			border_width: 1.0,
 		}
