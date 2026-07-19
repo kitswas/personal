@@ -4,11 +4,11 @@
 /// Implementing this trait is all that's needed for a component to:
 /// - Work in standard egui layouts via `ui.add(...)` (through `egui::Widget`)
 /// - Work in `egui_flex` layouts via `flex.add(item(), ...)` when the `flex` feature is
-///   enabled (through [`impl_flex_widget!`] called in each module)
+///   enabled (through `crate::impl_flex_widget!` called in each module)
 pub trait Elegant: egui::Widget {
 	/// The natural minimum width this component should occupy in a flex layout.
 	///
-	/// This is a static, layout-level hint fed into [`egui_flex::FlexItem`].
+	/// This is a static, layout-level hint fed into `egui_flex::FlexItem`.
 	/// Independent from inner rendering constraints like `ui.set_min_width()`.
 	/// Returns `None` if the component is naturally content-sized (default).
 	fn flex_default_min_width() -> Option<f32> {

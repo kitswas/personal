@@ -12,6 +12,30 @@
 //! - **Flex Layouts**: Enable the `flex` feature to seamlessly integrate with
 //!   `egui_flex`.
 //!
+//!
+//! ## Example Usage
+//! 
+//! ```rust,no_run
+//! use eframe::egui;
+//! use egui_elegant::{ElegantTheme, ThemeMode, MonaspaceFont, ElegantButton, Variant};
+//! 
+//! fn main() -> Result<(), eframe::Error> {
+//!     eframe::run_simple_native("App", Default::default(), |ctx, _frame| {
+//!         // 1. Apply the elegant theme
+//!         let theme = ElegantTheme::build(ThemeMode::System, MonaspaceFont::Neon);
+//!         theme.apply(ctx);
+//!         
+//!         // 2. Build your UI
+//!         egui::CentralPanel::default().show(ctx, |ui| {
+//!             ui.heading("Hello Elegant!");
+//!             ui.add(ElegantButton::new("Primary Action").variant(Variant::Primary));
+//!         });
+//!     })
+//! }
+//! ```
+//! 
+//! For full component showcases, check out the `examples/` directory in the repository.
+//!
 //! Every leaf component implements the [`traits::Elegant`] trait.
 
 mod accordion;
