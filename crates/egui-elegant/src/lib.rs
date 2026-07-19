@@ -1,6 +1,6 @@
 //! # egui-elegant
 //!
-//! A beautiful, modern, and elegant UI component library for `egui`.
+//! A beautiful, minimal, and elegant UI component library for `egui`.
 //!
 //! This crate provides a suite of ready-to-use widgets and a theming engine
 //! that make it easy to build stunning immediate-mode GUIs in Rust.
