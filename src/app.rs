@@ -36,7 +36,6 @@ pub struct OnboardingState {
 	pub password: String,
 	pub confirm_password: String,
 	pub base_commodity: String,
-	pub create_seed_accounts: bool,
 	pub phase: OnboardingPhase,
 }
 
@@ -71,7 +70,6 @@ pub enum Message {
 	OnboardingPasswordChanged(String),
 	OnboardingConfirmPasswordChanged(String),
 	OnboardingCommodityChanged(String),
-	OnboardingToggleSeedAccounts(bool),
 	OnboardingSubmit,
 	OnboardingComplete(Result<Arc<SqliteStorage>, String>),
 	NavigateTo(Route),
@@ -189,7 +187,6 @@ impl FinanceApp {
 								password: String::new(),
 								confirm_password: String::new(),
 								base_commodity: "INR".to_string(),
-								create_seed_accounts: true,
 								phase: OnboardingPhase::default(),
 							});
 						},
@@ -214,10 +211,6 @@ impl FinanceApp {
 					state.base_commodity = val;
 					Task::none()
 				},
-				Message::OnboardingToggleSeedAccounts(val) => {
-					state.create_seed_accounts = val;
-					Task::none()
-				},
 				Message::OnboardingSubmit => {
 					let password = state.password.clone();
 					if password.is_empty() || password != state.confirm_password {
@@ -234,7 +227,6 @@ impl FinanceApp {
 					}
 
 					let base_commodity = state.base_commodity.clone();
-					let seed = state.create_seed_accounts;
 					state.phase = OnboardingPhase::Submitting;
 
 					Task::perform(
@@ -250,7 +242,7 @@ impl FinanceApp {
 							let storage = SqliteStorage::new(db_path, password);
 							storage.init_db().map_err(|e| e.to_string())?;
 							storage
-								.complete_onboarding(&base_commodity, seed)
+								.complete_onboarding(&base_commodity)
 								.map_err(|e| e.to_string())?;
 
 							Ok(Arc::new(storage))
@@ -381,18 +373,18 @@ impl FinanceApp {
 							text_input("Master Password", &state.password)
 								.secure(true)
 								.on_input(Message::OnboardingPasswordChanged)
+								.on_submit(Message::OnboardingSubmit)
 								.padding(10),
 							text_input("Confirm Password", &state.confirm_password)
 								.secure(true)
 								.on_input(Message::OnboardingConfirmPasswordChanged)
+								.on_submit(Message::OnboardingSubmit)
 								.padding(10),
 							text("Base Commodity (e.g. INR, USD):").size(16),
 							text_input("Base Commodity", &state.base_commodity)
 								.on_input(Message::OnboardingCommodityChanged)
+								.on_submit(Message::OnboardingSubmit)
 								.padding(10),
-							checkbox(state.create_seed_accounts)
-								.label("Create default seed accounts")
-							.on_toggle(Message::OnboardingToggleSeedAccounts),
 							button("Initialize Database").on_press(Message::OnboardingSubmit).padding(10),
 						]
 						.spacing(20)

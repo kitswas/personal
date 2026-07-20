@@ -62,11 +62,7 @@ impl SqliteStorage {
 		}
 	}
 
-	pub fn complete_onboarding(
-		&self,
-		base_commodity: &str,
-		create_seed_accounts: bool,
-	) -> Result<(), StorageError> {
+	pub fn complete_onboarding(&self, base_commodity: &str) -> Result<(), StorageError> {
 		let mut conn = self.get_connection()?;
 		let tx = conn
 			.transaction()
@@ -83,24 +79,6 @@ impl SqliteStorage {
 			params![base_commodity],
 		)
 		.map_err(|e| StorageError::DbError(e.to_string()))?;
-
-		if create_seed_accounts {
-			// Asset
-			tx.execute(
-				"INSERT INTO accounts (id, name, type, commodity, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
-				params!["assets:bank", "Checking Account", "asset", base_commodity],
-			).map_err(|e| StorageError::DbError(e.to_string()))?;
-			// Expense
-			tx.execute(
-				"INSERT INTO accounts (id, name, type, commodity, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
-				params!["expenses:groceries", "Groceries", "expense", base_commodity],
-			).map_err(|e| StorageError::DbError(e.to_string()))?;
-			// Revenue
-			tx.execute(
-				"INSERT INTO accounts (id, name, type, commodity, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
-				params!["revenue:salary", "Salary", "revenue", base_commodity],
-			).map_err(|e| StorageError::DbError(e.to_string()))?;
-		}
 
 		tx.commit()
 			.map_err(|e| StorageError::DbError(e.to_string()))?;
