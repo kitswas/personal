@@ -140,9 +140,9 @@ impl CsvExcelParser {
 		let payee = cols[template.payee_col].trim().to_string();
 		let amount_str = cols[template.amount_col].trim();
 
-		// Parse date
-		let date = match NaiveDate::parse_from_str(date_str, &template.date_format) {
-			Ok(_) => date_str.to_string(),
+		// Parse date (Assume standard time T00:00:00Z for CSVs without time)
+		let timestamp = match NaiveDate::parse_from_str(date_str, &template.date_format) {
+			Ok(d) => format!("{}T00:00:00Z", d.format("%Y-%m-%d")),
 			Err(e) => {
 				return ParsedRow::Invalid {
 					row_idx,
@@ -188,12 +188,13 @@ impl CsvExcelParser {
 
 		ParsedRow::Valid {
 			row_idx,
-			date,
+			timestamp,
 			payee,
 			amount,
 			commodity: template.commodity.clone(),
 			suggested_account_id: None,
 			confidence: 0.0,
+			external_id: None,
 		}
 	}
 }

@@ -13,14 +13,16 @@ pub struct Account {
 	pub name: String,
 	pub account_type: AccountType,
 	pub commodity: String,
+	pub is_active: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct Transaction {
 	pub id: String,
-	pub date: String, // ISO 8601
+	pub timestamp: String,
 	pub payee: String,
 	pub notes: Option<String>,
+	pub external_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]

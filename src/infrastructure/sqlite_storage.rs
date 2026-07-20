@@ -10,6 +10,15 @@ pub struct SqliteStorage {
 	encryption_key: String,
 }
 
+impl std::fmt::Debug for SqliteStorage {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("SqliteStorage")
+			.field("db_path", &self.db_path)
+			.field("encryption_key", &"***REDACTED***")
+			.finish()
+	}
+}
+
 impl SqliteStorage {
 	pub fn new(db_path: PathBuf, encryption_key: String) -> Self {
 		Self {
@@ -55,14 +64,16 @@ impl Storage for SqliteStorage {
 				id        TEXT PRIMARY KEY,
 				name      TEXT NOT NULL,
 				type      TEXT NOT NULL CHECK(type IN ('asset','liability','equity','revenue','expense')),
-				commodity TEXT NOT NULL DEFAULT 'INR'
+				commodity TEXT NOT NULL DEFAULT 'INR',
+				is_active BOOLEAN NOT NULL DEFAULT 1
 			);
 
 			CREATE TABLE IF NOT EXISTS transactions (
-				id    TEXT PRIMARY KEY,
-				date  TEXT NOT NULL,
-				payee TEXT NOT NULL,
-				notes TEXT
+				id          TEXT PRIMARY KEY,
+				timestamp   TEXT NOT NULL,
+				payee       TEXT NOT NULL,
+				notes       TEXT,
+				external_id TEXT UNIQUE
 			);
 
 			CREATE TABLE IF NOT EXISTS postings (
@@ -75,7 +86,7 @@ impl Storage for SqliteStorage {
 
 			CREATE INDEX IF NOT EXISTS idx_postings_txn     ON postings(transaction_id);
 			CREATE INDEX IF NOT EXISTS idx_postings_account ON postings(account_id);
-			CREATE INDEX IF NOT EXISTS idx_txn_date         ON transactions(date);
+			CREATE INDEX IF NOT EXISTS idx_txn_timestamp    ON transactions(timestamp);
 			"#,
 		).map_err(|e| StorageError::DbError(format!("Failed to initialize schema: {}", e)))?;
 
@@ -93,9 +104,9 @@ impl Storage for SqliteStorage {
 		};
 
 		conn.execute(
-			"INSERT INTO accounts (id, name, type, commodity) VALUES (?1, ?2, ?3, ?4)
-			 ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, commodity=excluded.commodity",
-			params![account.id, account.name, type_str, account.commodity],
+			"INSERT INTO accounts (id, name, type, commodity, is_active) VALUES (?1, ?2, ?3, ?4, ?5)
+			 ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, commodity=excluded.commodity, is_active=excluded.is_active",
+			params![account.id, account.name, type_str, account.commodity, account.is_active],
 		).map_err(|e| StorageError::DbError(format!("Failed to save account: {}", e)))?;
 
 		Ok(())
@@ -111,20 +122,26 @@ impl Storage for SqliteStorage {
 			.transaction()
 			.map_err(|e| StorageError::DbError(e.to_string()))?;
 
-		// 1. Verify balancing rule
-		let sum: i64 = postings.iter().map(|p| p.amount).sum();
-		if sum != 0 {
-			return Err(StorageError::IntegrityError(format!(
-				"Transaction {} does not balance. Sum: {}",
-				txn.id, sum
-			)));
+		// 1. Verify balancing rule PER COMMODITY
+		let mut balances_by_commodity = std::collections::HashMap::new();
+		for posting in postings {
+			*balances_by_commodity.entry(&posting.commodity).or_insert(0) +=
+				posting.amount;
+		}
+		for (commodity, sum) in balances_by_commodity {
+			if sum != 0 {
+				return Err(StorageError::IntegrityError(format!(
+					"Transaction {} does not balance for commodity {}. Sum: {}",
+					txn.id, commodity, sum
+				)));
+			}
 		}
 
 		// 2. Insert transaction
 		tx.execute(
-			"INSERT INTO transactions (id, date, payee, notes) VALUES (?1, ?2, ?3, ?4)
-			 ON CONFLICT(id) DO UPDATE SET date=excluded.date, payee=excluded.payee, notes=excluded.notes",
-			params![txn.id, txn.date, txn.payee, txn.notes],
+			"INSERT INTO transactions (id, timestamp, payee, notes, external_id) VALUES (?1, ?2, ?3, ?4, ?5)
+			 ON CONFLICT(id) DO UPDATE SET timestamp=excluded.timestamp, payee=excluded.payee, notes=excluded.notes, external_id=excluded.external_id",
+			params![txn.id, txn.timestamp, txn.payee, txn.notes, txn.external_id],
 		).map_err(|e| StorageError::DbError(format!("Failed to save transaction: {}", e)))?;
 
 		// 3. Clear existing postings for this transaction to allow clean updates
@@ -151,16 +168,36 @@ impl Storage for SqliteStorage {
 		Ok(())
 	}
 
-	fn get_running_balances(&self) -> Result<Vec<(String, i64)>, StorageError> {
+	fn get_running_balances(&self) -> Result<Vec<(Account, i64)>, StorageError> {
 		let conn = self.get_connection()?;
 		let mut stmt = conn
 			.prepare(
-				"SELECT account_id, SUM(amount) as balance FROM postings GROUP BY account_id",
+				"SELECT a.id, a.name, a.type, a.commodity, a.is_active, SUM(p.amount) as balance
+                 FROM accounts a 
+                 JOIN postings p ON a.id = p.account_id 
+                 GROUP BY a.id"
 			)
 			.map_err(|e| StorageError::DbError(e.to_string()))?;
 
 		let balances_iter = stmt
-			.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+			.query_map([], |row| {
+				let type_str: String = row.get(2)?;
+				let account_type = match type_str.as_str() {
+					"asset" => AccountType::Asset,
+					"liability" => AccountType::Liability,
+					"equity" => AccountType::Equity,
+					"revenue" => AccountType::Revenue,
+					_ => AccountType::Expense,
+				};
+				let acc = Account {
+					id: row.get(0)?,
+					name: row.get(1)?,
+					account_type,
+					commodity: row.get(3)?,
+					is_active: row.get(4)?,
+				};
+				Ok((acc, row.get(5)?))
+			})
 			.map_err(|e| StorageError::DbError(e.to_string()))?;
 
 		let mut results = Vec::new();
@@ -209,6 +246,7 @@ mod tests {
 			name: "Checking".to_string(),
 			account_type: AccountType::Asset,
 			commodity: "INR".to_string(),
+			is_active: true,
 		};
 
 		assert!(storage.save_account(&acc).is_ok());
@@ -230,21 +268,24 @@ mod tests {
 			name: "Checking".to_string(),
 			account_type: AccountType::Asset,
 			commodity: "INR".to_string(),
+			is_active: true,
 		};
 		let acc2 = Account {
 			id: "acc_2".to_string(),
 			name: "Groceries".to_string(),
 			account_type: AccountType::Expense,
 			commodity: "INR".to_string(),
+			is_active: true,
 		};
 		storage.save_account(&acc1).unwrap();
 		storage.save_account(&acc2).unwrap();
 
 		let txn = Transaction {
 			id: "txn_1".to_string(),
-			date: "2024-01-01".to_string(),
+			timestamp: "2024-01-01T12:00:00Z".to_string(),
 			payee: "Supermarket".to_string(),
 			notes: None,
+			external_id: None,
 		};
 
 		let p1 = Posting {
@@ -271,8 +312,8 @@ mod tests {
 
 		let balances = storage.get_running_balances().unwrap();
 		assert_eq!(balances.len(), 2);
-		let checking_bal = balances.iter().find(|(id, _)| id == "acc_1").unwrap().1;
-		let grocery_bal = balances.iter().find(|(id, _)| id == "acc_2").unwrap().1;
+		let checking_bal = balances.iter().find(|(a, _)| a.id == "acc_1").unwrap().1;
+		let grocery_bal = balances.iter().find(|(a, _)| a.id == "acc_2").unwrap().1;
 
 		assert_eq!(checking_bal, -5000);
 		assert_eq!(grocery_bal, 5000);
@@ -286,14 +327,16 @@ mod tests {
 			name: "Checking".to_string(),
 			account_type: AccountType::Asset,
 			commodity: "INR".to_string(),
+			is_active: true,
 		};
 		storage.save_account(&acc1).unwrap();
 
 		let txn = Transaction {
 			id: "txn_1".to_string(),
-			date: "2024-01-01".to_string(),
+			timestamp: "2024-01-01T12:00:00Z".to_string(),
 			payee: "Supermarket".to_string(),
 			notes: None,
+			external_id: None,
 		};
 
 		let p1 = Posting {
@@ -307,5 +350,55 @@ mod tests {
 		// Unbalanced (Sum != 0)
 		let result = storage.save_transaction_with_postings(&txn, &[p1]);
 		assert!(matches!(result, Err(StorageError::IntegrityError(_))));
+	}
+
+	#[test]
+	fn test_save_transaction_duplicate_external_id() {
+		let storage = get_test_storage();
+		let acc1 = Account {
+			id: "acc_1".to_string(),
+			name: "Checking".to_string(),
+			account_type: AccountType::Asset,
+			commodity: "INR".to_string(),
+			is_active: true,
+		};
+		storage.save_account(&acc1).unwrap();
+
+		let txn1 = Transaction {
+			id: "txn_1".to_string(),
+			timestamp: "2024-01-01T12:00:00Z".to_string(),
+			payee: "A".to_string(),
+			notes: None,
+			external_id: Some("ext_123".to_string()),
+		};
+		let p1 = Posting {
+			id: "post_1".to_string(),
+			transaction_id: "txn_1".to_string(),
+			account_id: "acc_1".to_string(),
+			amount: 0,
+			commodity: "INR".to_string(),
+		};
+		storage
+			.save_transaction_with_postings(&txn1, &[p1])
+			.unwrap();
+
+		let txn2 = Transaction {
+			id: "txn_2".to_string(),
+			timestamp: "2024-01-02T12:00:00Z".to_string(),
+			payee: "B".to_string(),
+			notes: None,
+			external_id: Some("ext_123".to_string()),
+		};
+		let p2 = Posting {
+			id: "post_2".to_string(),
+			transaction_id: "txn_2".to_string(),
+			account_id: "acc_1".to_string(),
+			amount: 0,
+			commodity: "INR".to_string(),
+		};
+
+		// Should fail due to UNIQUE constraint on external_id
+		let result = storage.save_transaction_with_postings(&txn2, &[p2]);
+		assert!(matches!(result, Err(StorageError::DbError(_))));
 	}
 }

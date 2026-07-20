@@ -13,7 +13,7 @@ mod sankey;
 use app::FinanceApp;
 
 fn main() -> iced::Result {
-	iced::application(FinanceApp::default, FinanceApp::update, FinanceApp::view)
+	iced::application(FinanceApp::new, FinanceApp::update, FinanceApp::view)
 		.theme(FinanceApp::theme)
 		.window(iced::window::Settings {
 			// we can customize window here if we need

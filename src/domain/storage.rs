@@ -23,5 +23,5 @@ pub trait Storage {
 		postings: &[Posting],
 	) -> Result<(), StorageError>;
 
-	fn get_running_balances(&self) -> Result<Vec<(String, i64)>, StorageError>;
+	fn get_running_balances(&self) -> Result<Vec<(Account, i64)>, StorageError>;
 }

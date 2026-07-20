@@ -17,11 +17,12 @@ impl Ledger for CoreLedger {
 		for row in rows {
 			match row {
 				ParsedRow::Valid {
-					date,
+					timestamp,
 					payee,
 					amount,
 					commodity,
 					suggested_account_id,
+					external_id,
 					..
 				} => {
 					let account_id = match suggested_account_id {
@@ -37,9 +38,10 @@ impl Ledger for CoreLedger {
 					let txn_id = Uuid::new_v4().to_string();
 					let txn = Transaction {
 						id: txn_id.clone(),
-						date: date.clone(),
+						timestamp: timestamp.clone(),
 						payee: payee.clone(),
 						notes: None,
+						external_id: external_id.clone(),
 					};
 
 					// Double entry requires 2 postings that sum to 0.
@@ -121,8 +123,8 @@ mod tests {
 			Ok(())
 		}
 
-		fn get_running_balances(&self) -> Result<Vec<(String, i64)>, StorageError> {
-			Ok(Vec::new())
+		fn get_running_balances(&self) -> Result<Vec<(Account, i64)>, StorageError> {
+			Ok(vec![])
 		}
 	}
 
@@ -133,12 +135,13 @@ mod tests {
 
 		let rows = vec![ParsedRow::Valid {
 			row_idx: 1,
-			date: "2024-01-01".to_string(),
+			timestamp: "2024-01-01T12:00:00Z".to_string(),
 			payee: "Grocery Store".to_string(),
 			amount: -5000,
 			commodity: "INR".to_string(),
 			suggested_account_id: Some("expenses:food".to_string()),
 			confidence: 1.0,
+			external_id: None,
 		}];
 
 		assert!(ledger.validate_and_commit(&rows, &mock_storage).is_ok());

@@ -5,12 +5,13 @@ use thiserror::Error;
 pub enum ParsedRow {
 	Valid {
 		row_idx: usize,
-		date: String,
+		timestamp: String,
 		payee: String,
 		amount: i64,
 		commodity: String,
 		suggested_account_id: Option<String>,
 		confidence: f32,
+		external_id: Option<String>,
 	},
 	Invalid {
 		row_idx: usize,
