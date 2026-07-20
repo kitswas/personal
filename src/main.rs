@@ -15,6 +15,7 @@ use app::FinanceApp;
 fn main() -> iced::Result {
 	iced::application(FinanceApp::new, FinanceApp::update, FinanceApp::view)
 		.theme(FinanceApp::theme)
+		.subscription(FinanceApp::subscription)
 		.window(iced::window::Settings {
 			// we can customize window here if we need
 			..Default::default()

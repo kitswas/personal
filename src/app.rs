@@ -46,6 +46,7 @@ pub enum Message {
 	TestDataLoaded(Result<Vec<crate::domain::parser::ParsedRow>, String>),
 	CommitTriage,
 	TriageCommitted(Result<(), String>),
+	ThemeChanged(Theme),
 
 	// Onboarding
 	OnboardingPasswordChanged(String),
@@ -111,7 +112,7 @@ impl FinanceApp {
 								storage,
 								balances: Vec::new(),
 								sankey: SankeyDiagram::new(),
-								theme: Theme::Dark,
+								theme: cosmic_dark(),
 								operation: OperationState::Idle,
 							};
 							return Task::perform(
@@ -204,7 +205,7 @@ impl FinanceApp {
 							storage,
 							balances: Vec::new(),
 							sankey: SankeyDiagram::new(),
-							theme: Theme::Dark,
+							theme: cosmic_dark(),
 							operation: OperationState::Idle,
 						};
 						Task::perform(
@@ -244,11 +245,15 @@ impl FinanceApp {
 					Task::none()
 				},
 				Message::ToggleTheme => {
-					*theme = if *theme == Theme::Dark {
-						Theme::Light
+					*theme = if *theme == cosmic_dark() {
+						cosmic_light()
 					} else {
-						Theme::Dark
+						cosmic_dark()
 					};
+					Task::none()
+				},
+				Message::ThemeChanged(new_theme) => {
+					*theme = new_theme;
 					Task::none()
 				},
 				Message::LoadTestData => {
@@ -635,7 +640,53 @@ impl FinanceApp {
 	pub fn theme(&self) -> Theme {
 		match self {
 			FinanceApp::Loaded { theme, .. } => theme.clone(),
-			_ => Theme::Dark,
+			_ => cosmic_dark(),
 		}
 	}
+
+	pub fn subscription(&self) -> iced::Subscription<Message> {
+		fn theme_stream() -> impl iced::futures::Stream<Item = Message> {
+			tokio_stream::StreamExt::map(
+				mundy::Preferences::stream(mundy::Interest::ColorScheme),
+				|prefs| {
+					let theme = match prefs.color_scheme {
+						mundy::ColorScheme::Dark => cosmic_dark(),
+						mundy::ColorScheme::Light => cosmic_light(),
+						_ => cosmic_dark(),
+					};
+					Message::ThemeChanged(theme)
+				},
+			)
+		}
+
+		iced::Subscription::run(theme_stream)
+	}
+}
+
+pub fn cosmic_light() -> Theme {
+	Theme::custom(
+		"Cosmic Light".to_string(),
+		iced::theme::Palette {
+			background: iced::Color::from_rgb(0.957, 0.957, 0.961),
+			text: iced::Color::from_rgb(0.141, 0.141, 0.141),
+			primary: iced::Color::from_rgb(0.282, 0.725, 0.780),
+			success: iced::Color::from_rgb(0.957, 0.545, 0.161),
+			danger: iced::Color::from_rgb(0.898, 0.224, 0.208),
+			warning: iced::Color::from_rgb(0.957, 0.745, 0.161),
+		},
+	)
+}
+
+pub fn cosmic_dark() -> Theme {
+	Theme::custom(
+		"Cosmic Dark".to_string(),
+		iced::theme::Palette {
+			background: iced::Color::from_rgb(0.141, 0.141, 0.141),
+			text: iced::Color::from_rgb(0.957, 0.957, 0.961),
+			primary: iced::Color::from_rgb(0.282, 0.725, 0.780),
+			success: iced::Color::from_rgb(0.957, 0.545, 0.161),
+			danger: iced::Color::from_rgb(0.898, 0.224, 0.208),
+			warning: iced::Color::from_rgb(0.957, 0.745, 0.161),
+		},
+	)
 }
