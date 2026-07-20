@@ -6,18 +6,17 @@ use crate::{
 		storage::Storage,
 	},
 	infrastructure::{
-		core_ledger::CoreLedger,
-		csv_excel_parser::CsvExcelParser,
+		core_ledger::CoreLedger, csv_excel_parser::CsvExcelParser,
 		sqlite_storage::SqliteStorage,
 	},
 	sankey::SankeyDiagram,
 };
 use iced::{
 	Element, Length, Task, Theme,
-	widget::{button, column, container, row, text},
+	widget::{button, column, container, row},
 };
-use std::path::PathBuf;
-use std::sync::Arc;
+use iced_selection::text;
+use std::{path::PathBuf, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub enum OperationState {
@@ -129,38 +128,49 @@ impl FinanceApp {
 				Message::LoadTestData => {
 					*operation = OperationState::Loading("Importing CSV Data...".into());
 					let storage_clone = Arc::clone(storage);
-					
+
 					Task::perform(
 						async move {
-							// 0. Ensure target accounts exist in the DB (resolves Foreign Key constraint)
-							storage_clone.save_account(&Account {
-								id: "assets:bank".into(),
-								name: "Checking Account".into(),
-								account_type: AccountType::Asset,
-								commodity: "INR".into(),
-								is_active: true,
-							}).map_err(|e| e.to_string())?;
-							
-							storage_clone.save_account(&Account {
-								id: "expenses:food".into(),
-								name: "Groceries".into(),
-								account_type: AccountType::Expense,
-								commodity: "INR".into(),
-								is_active: true,
-							}).map_err(|e| e.to_string())?;
-							
-							storage_clone.save_account(&Account {
-								id: "revenue:salary".into(),
-								name: "Salary".into(),
-								account_type: AccountType::Revenue,
-								commodity: "INR".into(),
-								is_active: true,
-							}).map_err(|e| e.to_string())?;
+							// 0. Ensure target accounts exist in the DB (resolves Foreign
+							//    Key constraint)
+							storage_clone
+								.save_account(&Account {
+									id: "assets:bank".into(),
+									name: "Checking Account".into(),
+									account_type: AccountType::Asset,
+									commodity: "INR".into(),
+									is_active: true,
+								})
+								.map_err(|e| e.to_string())?;
+
+							storage_clone
+								.save_account(&Account {
+									id: "expenses:food".into(),
+									name: "Groceries".into(),
+									account_type: AccountType::Expense,
+									commodity: "INR".into(),
+									is_active: true,
+								})
+								.map_err(|e| e.to_string())?;
+
+							storage_clone
+								.save_account(&Account {
+									id: "revenue:salary".into(),
+									name: "Salary".into(),
+									account_type: AccountType::Revenue,
+									commodity: "INR".into(),
+									is_active: true,
+								})
+								.map_err(|e| e.to_string())?;
 
 							// 1. Create dummy CSV
 							let csv_path = PathBuf::from("test_data.csv");
-							std::fs::write(&csv_path, "Date,Payee,Amount\n2024-01-01,Groceries,-120.50\n2024-01-02,Salary,3000.00\n").map_err(|e| e.to_string())?;
-							
+							std::fs::write(
+								&csv_path,
+								"Date,Payee,Amount\n2024-01-01,Groceries,-120.50\n2024-01-02,Salary,3000.00\n",
+							)
+							.map_err(|e| e.to_string())?;
+
 							let template = ImportTemplate {
 								name: "Test CSV".into(),
 								format: "csv".into(),
@@ -175,30 +185,43 @@ impl FinanceApp {
 
 							// 2. Parse using CsvExcelParser
 							let parser = CsvExcelParser;
-							let mut rows = parser.parse_file(&csv_path, &template).map_err(|e| e.to_string())?;
+							let mut rows = parser
+								.parse_file(&csv_path, &template)
+								.map_err(|e| e.to_string())?;
 
-							// For test purposes, inject default accounts because we skipped categorization ML
+							// For test purposes, inject default accounts because we
+							// skipped categorization ML
 							for row in &mut rows {
-								if let crate::domain::parser::ParsedRow::Valid { suggested_account_id, amount, .. } = row {
+								if let crate::domain::parser::ParsedRow::Valid {
+									suggested_account_id,
+									amount,
+									..
+								} = row
+								{
 									if *amount < 0 {
-										*suggested_account_id = Some("expenses:food".to_string());
+										*suggested_account_id =
+											Some("expenses:food".to_string());
 									} else {
-										*suggested_account_id = Some("revenue:salary".to_string());
+										*suggested_account_id =
+											Some("revenue:salary".to_string());
 									}
 								}
 							}
 
 							// 3. Commit using CoreLedger
 							let ledger = CoreLedger;
-							ledger.validate_and_commit(&rows, storage_clone.as_ref()).map_err(|e| e.to_string())?;
+							ledger
+								.validate_and_commit(&rows, storage_clone.as_ref())
+								.map_err(|e| e.to_string())?;
 
 							Ok(())
 						},
-						Message::TestDataLoaded
+						Message::TestDataLoaded,
 					)
 				},
 				Message::TestDataLoaded(Ok(_)) => {
-					*operation = OperationState::Success("Data imported successfully".into());
+					*operation =
+						OperationState::Success("Data imported successfully".into());
 					let storage_clone = Arc::clone(storage);
 					Task::perform(
 						async move {
@@ -220,7 +243,7 @@ impl FinanceApp {
 		}
 	}
 
-	pub fn view(&self) -> Element<'_, Message> {
+	pub fn view(&self) -> Element<Message> {
 		match self {
 			FinanceApp::Loading => container(text("Loading Database...").size(40))
 				.width(Length::Fill)
@@ -230,7 +253,12 @@ impl FinanceApp {
 				.into(),
 			FinanceApp::Error(e) => container(
 				column![
-					text("Fatal Error").size(40).style(text::danger),
+					text("Fatal Error").size(40).style(|theme: &Theme| {
+						iced_selection::text::Style {
+							color: Some(theme.palette().danger),
+							..iced_selection::text::default(theme)
+						}
+					}),
 					text(e).size(20),
 				]
 				.spacing(20)
@@ -241,7 +269,12 @@ impl FinanceApp {
 			.center_x(Length::Fill)
 			.center_y(Length::Fill)
 			.into(),
-			FinanceApp::Loaded { balances, sankey, operation, .. } => {
+			FinanceApp::Loaded {
+				balances,
+				sankey,
+				operation,
+				..
+			} => {
 				// ADR-0007: Three-pane layout (30-40-30)
 
 				// Build the Nav Pane
@@ -252,14 +285,22 @@ impl FinanceApp {
 				} else {
 					for (acc, bal) in balances {
 						let display_balance = match acc.account_type {
-							AccountType::Asset | AccountType::Expense => *bal as f64 / 100.0,
-							AccountType::Liability | AccountType::Equity | AccountType::Revenue => -(*bal as f64) / 100.0,
+							AccountType::Asset | AccountType::Expense => {
+								*bal as f64 / 100.0
+							},
+							AccountType::Liability
+							| AccountType::Equity
+							| AccountType::Revenue => -(*bal as f64) / 100.0,
 						};
-						nav_col = nav_col.push(text(format!("{}: {:.2}", acc.name, display_balance)));
+						nav_col = nav_col.push(iced_selection::text(format!(
+							"{}: {:.2}",
+							acc.name, display_balance
+						)));
 					}
 				}
 
-				let nav_pane = container(nav_col).width(Length::FillPortion(3)).padding(24);
+				let nav_pane =
+					container(nav_col).width(Length::FillPortion(3)).padding(24);
 
 				// List Pane
 				let mut list_col = column![
@@ -267,26 +308,44 @@ impl FinanceApp {
 					row![
 						button("Toggle Theme").on_press(Message::ToggleTheme),
 						button("Load Test CSV").on_press(Message::LoadTestData)
-					].spacing(16),
+					]
+					.spacing(16),
 				]
 				.spacing(16);
 
 				match operation {
 					OperationState::Idle => {},
 					OperationState::Loading(msg) => {
-						list_col = list_col.push(text(msg).style(text::primary));
+						list_col = list_col.push(text(msg).style(|theme: &Theme| {
+							iced_selection::text::Style {
+								color: Some(theme.palette().primary),
+								..iced_selection::text::default(theme)
+							}
+						}));
 					},
 					OperationState::Success(msg) => {
-						list_col = list_col.push(text(msg).style(text::success));
+						list_col = list_col.push(text(msg).style(|theme: &Theme| {
+							iced_selection::text::Style {
+								color: Some(theme.palette().success),
+								..iced_selection::text::default(theme)
+							}
+						}));
 					},
 					OperationState::Error(msg) => {
-						list_col = list_col.push(text(format!("Error: {}", msg)).style(text::danger));
-					}
+						list_col = list_col.push(text(format!("Error: {}", msg)).style(
+							|theme: &Theme| iced_selection::text::Style {
+								color: Some(theme.palette().danger),
+								..iced_selection::text::default(theme)
+							},
+						));
+					},
 				}
-				
+
 				list_col = list_col.push(sankey.view());
 
-				let list_pane = container(list_col).width(Length::FillPortion(4)).padding(24);
+				let list_pane = container(list_col)
+					.width(Length::FillPortion(4))
+					.padding(24);
 
 				// Detail Pane
 				let detail_pane = container(
