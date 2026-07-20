@@ -27,7 +27,7 @@ impl SankeyDiagram {
 		}
 	}
 
-	pub fn view(&self) -> Element<Message> {
+	pub fn view(&self) -> Element<'_, Message> {
 		Canvas::new(self)
 			.width(iced::Length::Fill)
 			.height(iced::Length::Fill)

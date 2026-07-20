@@ -9,7 +9,7 @@ use crate::{
 };
 use iced::{
 	Element, Length, Task, Theme,
-	widget::{button, checkbox, column, container, row, text_input},
+	widget::{button, column, container, row, text_input},
 };
 use iced_selection::text;
 use std::{path::PathBuf, sync::Arc};
@@ -347,7 +347,7 @@ impl FinanceApp {
 		}
 	}
 
-	pub fn view(&self) -> Element<Message> {
+	pub fn view(&self) -> Element<'_, Message> {
 		match &self.state {
 			AppState::Booting => {
 				container(text("Booting & Checking Security...").size(40))
