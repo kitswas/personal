@@ -2,13 +2,9 @@ use crate::{
 	domain::{
 		ledger::Ledger,
 		models::{Account, AccountType},
-		parser::{ImportTemplate, Parser},
 		storage::Storage,
 	},
-	infrastructure::{
-		core_ledger::CoreLedger, csv_excel_parser::CsvExcelParser,
-		sqlite_storage::SqliteStorage,
-	},
+	infrastructure::{core_ledger::CoreLedger, sqlite_storage::SqliteStorage},
 	sankey::SankeyDiagram,
 };
 use iced::{
@@ -44,6 +40,14 @@ pub struct OnboardingState {
 	pub phase: OnboardingPhase,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ThemeMode {
+	Light,
+	Dark,
+	#[default]
+	System,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route {
 	Dashboard,
@@ -58,9 +62,7 @@ pub enum Message {
 	StorageInitialized(Result<Option<Arc<SqliteStorage>>, String>),
 	BalancesLoaded(Result<Vec<(Account, i64)>, String>),
 	SankeyNodeClicked(String),
-	ToggleTheme,
-	LoadTestData,
-	TestDataLoaded(Result<Vec<crate::domain::parser::ParsedRow>, String>),
+	ChangeThemeMode(ThemeMode),
 	CommitTriage,
 	TriageCommitted(Result<(), String>),
 	ThemeChanged(Theme),
@@ -83,6 +85,7 @@ pub enum FinanceApp {
 		balances: Vec<(Account, i64)>,
 		sankey: SankeyDiagram,
 		theme: Theme,
+		theme_mode: ThemeMode,
 		operation: OperationState,
 		current_route: Route,
 	},
@@ -127,11 +130,14 @@ impl FinanceApp {
 					match res {
 						Ok(Some(storage)) => {
 							let storage_clone = Arc::clone(&storage);
+							let initial_theme = get_system_theme();
+
 							*self = FinanceApp::Loaded {
 								storage,
 								balances: Vec::new(),
 								sankey: SankeyDiagram::new(),
-								theme: cosmic_dark(),
+								theme: initial_theme,
+								theme_mode: ThemeMode::System,
 								operation: OperationState::Idle,
 								current_route: Route::Dashboard,
 							};
@@ -228,7 +234,8 @@ impl FinanceApp {
 							storage,
 							balances: Vec::new(),
 							sankey: SankeyDiagram::new(),
-							theme: cosmic_dark(),
+							theme: get_system_theme(),
+							theme_mode: ThemeMode::System,
 							operation: OperationState::Idle,
 							current_route: Route::Dashboard,
 						};
@@ -255,6 +262,7 @@ impl FinanceApp {
 				balances,
 				sankey: _,
 				theme,
+				theme_mode,
 				operation,
 				current_route,
 			} => match message {
@@ -274,117 +282,15 @@ impl FinanceApp {
 					println!("Node clicked: {}", node_id);
 					Task::none()
 				},
-				Message::ToggleTheme => {
-					*theme = if *theme == cosmic_dark() {
-						cosmic_light()
-					} else {
-						cosmic_dark()
-					};
-					Task::none()
-				},
-				Message::ThemeChanged(new_theme) => {
-					*theme = new_theme;
-					Task::none()
-				},
-				Message::LoadTestData => {
-					*operation = OperationState::Loading("Importing CSV Data...".into());
-					let storage_clone = Arc::clone(storage);
-
-					Task::perform(
-						async move {
-							// 0. Ensure target accounts exist
-							storage_clone
-								.save_account(&Account {
-									id: "assets:bank".into(),
-									name: "Checking Account".into(),
-									account_type: AccountType::Asset,
-									commodity: "INR".into(),
-									is_active: true,
-								})
-								.map_err(|e| e.to_string())?;
-							storage_clone
-								.save_account(&Account {
-									id: "expenses:food".into(),
-									name: "Groceries".into(),
-									account_type: AccountType::Expense,
-									commodity: "INR".into(),
-									is_active: true,
-								})
-								.map_err(|e| e.to_string())?;
-							storage_clone
-								.save_account(&Account {
-									id: "revenue:salary".into(),
-									name: "Salary".into(),
-									account_type: AccountType::Revenue,
-									commodity: "INR".into(),
-									is_active: true,
-								})
-								.map_err(|e| e.to_string())?;
-
-							// 1. Create dummy CSV
-							let csv_path = PathBuf::from("test_data.csv");
-							std::fs::write(
-								&csv_path,
-								"Date,Payee,Amount\n2024-01-01,Groceries,-120.50\n2024-01-02,Salary,3000.00\n",
-							)
-							.map_err(|e| e.to_string())?;
-
-							let template = ImportTemplate {
-								name: "Test CSV".into(),
-								format: "csv".into(),
-								has_headers: true,
-								date_col: 0,
-								date_format: "%Y-%m-%d".into(),
-								payee_col: 1,
-								amount_col: 2,
-								amount_format: "float".into(),
-								commodity: "INR".into(),
-							};
-
-							// 2. Parse using CsvExcelParser
-							let parser = CsvExcelParser;
-							let mut rows = parser
-								.parse_file(&csv_path, &template)
-								.map_err(|e| e.to_string())?;
-
-							// 3. Auto-Categorize
-							let mut categorizer =
-								crate::domain::categorizer::Categorizer::new();
-							categorizer
-								.add_rule(r"(?i)groceries", "expenses:food")
-								.unwrap();
-							categorizer
-								.add_rule(r"(?i)salary", "revenue:salary")
-								.unwrap();
-
-							for row in &mut rows {
-								if let crate::domain::parser::ParsedRow::Valid {
-									suggested_account_id,
-									confidence,
-									payee,
-									..
-								} = row
-								{
-									if let Some((acc, conf)) =
-										categorizer.categorize(payee)
-									{
-										*suggested_account_id = Some(acc);
-										*confidence = conf;
-									}
-								}
-							}
-
-							Ok(rows)
+				Message::ChangeThemeMode(mode) => {
+					*theme_mode = mode;
+					match mode {
+						ThemeMode::Light => *theme = cosmic_light(),
+						ThemeMode::Dark => *theme = cosmic_dark(),
+						ThemeMode::System => {
+							*theme = get_system_theme();
 						},
-						Message::TestDataLoaded,
-					)
-				},
-				Message::TestDataLoaded(Ok(rows)) => {
-					*operation = OperationState::Triage(rows);
-					Task::none()
-				},
-				Message::TestDataLoaded(Err(e)) => {
-					*operation = OperationState::Error(e);
+					}
 					Task::none()
 				},
 				Message::CommitTriage => {
@@ -517,6 +423,7 @@ impl FinanceApp {
 				sankey,
 				operation,
 				current_route,
+				theme_mode,
 				..
 			} => {
 				// ADR-0007: Three-pane layout (30-40-30) swapped to Nav-Detail-List
@@ -562,6 +469,21 @@ impl FinanceApp {
 							)));
 						}
 					},
+					Route::Settings => {
+						detail_col = detail_col.push(text("Theme Preferences").size(20));
+						let modes =
+							[ThemeMode::Light, ThemeMode::Dark, ThemeMode::System];
+						let mut r = row![].spacing(10);
+						for mode in modes {
+							r = r.push(iced::widget::radio(
+								format!("{:?}", mode),
+								mode,
+								Some(*theme_mode),
+								Message::ChangeThemeMode,
+							));
+						}
+						detail_col = detail_col.push(r);
+					},
 					_ => {
 						detail_col =
 							detail_col.push(text("Contextual action surface..."));
@@ -573,15 +495,9 @@ impl FinanceApp {
 					.padding(24);
 
 				// Pane 3: Secondary Content / List Pane (30%)
-				let mut list_col = column![
-					text(format!("List: {:?}", current_route)).size(24),
-					row![
-						button("Toggle Theme").on_press(Message::ToggleTheme),
-						button("Load Test CSV").on_press(Message::LoadTestData)
-					]
-					.spacing(16),
-				]
-				.spacing(16);
+				let mut list_col =
+					column![text(format!("List: {:?}", current_route)).size(24),]
+						.spacing(16);
 
 				match operation {
 					OperationState::Loading(msg) => {
@@ -696,16 +612,34 @@ impl FinanceApp {
 	}
 
 	pub fn subscription(&self) -> iced::Subscription<Message> {
+		let is_system = match self {
+			FinanceApp::Loaded { theme_mode, .. } => *theme_mode == ThemeMode::System,
+			_ => true,
+		};
+
+		if !is_system {
+			return iced::Subscription::none();
+		}
+
 		fn theme_stream() -> impl iced::futures::Stream<Item = Message> {
-			tokio_stream::StreamExt::map(
-				mundy::Preferences::stream(mundy::Interest::ColorScheme),
-				|prefs| {
-					let theme = match prefs.color_scheme {
-						mundy::ColorScheme::Dark => cosmic_dark(),
-						mundy::ColorScheme::Light => cosmic_light(),
-						_ => cosmic_dark(),
-					};
-					Message::ThemeChanged(theme)
+			iced::stream::channel(
+				10,
+				|mut sender: iced::futures::channel::mpsc::Sender<Message>| async move {
+					let _sub = mundy::Preferences::subscribe(
+						mundy::Interest::All,
+						move |prefs| {
+							let theme = resolve_os_theme(prefs);
+							println!("MUNDY SENDING THEME: {:?}", prefs.color_scheme);
+							if let Err(e) = sender.try_send(Message::ThemeChanged(theme))
+							{
+								println!("SEND FAILED: {:?}", e);
+							}
+						},
+					);
+
+					// Keep subscription alive
+					let () = iced::futures::future::pending().await;
+					unreachable!()
 				},
 			)
 		}
@@ -740,4 +674,22 @@ pub fn cosmic_dark() -> Theme {
 			warning: iced::Color::from_rgb8(251, 191, 36),
 		},
 	)
+}
+
+pub fn resolve_os_theme(prefs: mundy::Preferences) -> Theme {
+	match prefs.color_scheme {
+		mundy::ColorScheme::Light => cosmic_light(),
+		_ => cosmic_dark(),
+	}
+}
+
+pub fn get_system_theme() -> Theme {
+	if let Some(prefs) = mundy::Preferences::once_blocking(
+		mundy::Interest::All,
+		std::time::Duration::from_millis(50),
+	) {
+		resolve_os_theme(prefs)
+	} else {
+		cosmic_dark()
+	}
 }
