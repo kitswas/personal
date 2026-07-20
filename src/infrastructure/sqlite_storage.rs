@@ -47,6 +47,65 @@ impl SqliteStorage {
 
 		Ok(conn)
 	}
+
+	pub fn is_onboarding_done(&self) -> Result<bool, StorageError> {
+		let conn = self.get_connection()?;
+		let result: rusqlite::Result<String> = conn.query_row(
+			"SELECT value FROM settings WHERE key = 'onboarding_complete'",
+			[],
+			|row| row.get(0),
+		);
+		match result {
+			Ok(v) => Ok(v == "true"),
+			Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+			Err(e) => Err(StorageError::DbError(e.to_string())),
+		}
+	}
+
+	pub fn complete_onboarding(
+		&self,
+		base_commodity: &str,
+		create_seed_accounts: bool,
+	) -> Result<(), StorageError> {
+		let mut conn = self.get_connection()?;
+		let tx = conn
+			.transaction()
+			.map_err(|e| StorageError::DbError(e.to_string()))?;
+
+		tx.execute(
+			"INSERT OR REPLACE INTO settings (key, value) VALUES ('onboarding_complete', 'true')",
+			[],
+		)
+		.map_err(|e| StorageError::DbError(e.to_string()))?;
+
+		tx.execute(
+			"INSERT OR REPLACE INTO settings (key, value) VALUES ('base_commodity', ?1)",
+			params![base_commodity],
+		)
+		.map_err(|e| StorageError::DbError(e.to_string()))?;
+
+		if create_seed_accounts {
+			// Asset
+			tx.execute(
+				"INSERT INTO accounts (id, name, type, commodity, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
+				params!["assets:bank", "Checking Account", "asset", base_commodity],
+			).map_err(|e| StorageError::DbError(e.to_string()))?;
+			// Expense
+			tx.execute(
+				"INSERT INTO accounts (id, name, type, commodity, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
+				params!["expenses:groceries", "Groceries", "expense", base_commodity],
+			).map_err(|e| StorageError::DbError(e.to_string()))?;
+			// Revenue
+			tx.execute(
+				"INSERT INTO accounts (id, name, type, commodity, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
+				params!["revenue:salary", "Salary", "revenue", base_commodity],
+			).map_err(|e| StorageError::DbError(e.to_string()))?;
+		}
+
+		tx.commit()
+			.map_err(|e| StorageError::DbError(e.to_string()))?;
+		Ok(())
+	}
 }
 
 impl Storage for SqliteStorage {
