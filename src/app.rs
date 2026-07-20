@@ -22,6 +22,7 @@ use std::{path::PathBuf, sync::Arc};
 pub enum OperationState {
 	Idle,
 	Loading(String),
+	Triage(Vec<crate::domain::parser::ParsedRow>),
 	Success(String),
 	Error(String),
 }
@@ -42,7 +43,9 @@ pub enum Message {
 	SankeyNodeClicked(String),
 	ToggleTheme,
 	LoadTestData,
-	TestDataLoaded(Result<(), String>),
+	TestDataLoaded(Result<Vec<crate::domain::parser::ParsedRow>, String>),
+	CommitTriage,
+	TriageCommitted(Result<(), String>),
 
 	// Onboarding
 	OnboardingPasswordChanged(String),
@@ -254,8 +257,7 @@ impl FinanceApp {
 
 					Task::perform(
 						async move {
-							// 0. Ensure target accounts exist in the DB (resolves Foreign
-							//    Key constraint)
+							// 0. Ensure target accounts exist
 							storage_clone
 								.save_account(&Account {
 									id: "assets:bank".into(),
@@ -265,7 +267,6 @@ impl FinanceApp {
 									is_active: true,
 								})
 								.map_err(|e| e.to_string())?;
-
 							storage_clone
 								.save_account(&Account {
 									id: "expenses:food".into(),
@@ -275,7 +276,6 @@ impl FinanceApp {
 									is_active: true,
 								})
 								.map_err(|e| e.to_string())?;
-
 							storage_clone
 								.save_account(&Account {
 									id: "revenue:salary".into(),
@@ -303,7 +303,7 @@ impl FinanceApp {
 								payee_col: 1,
 								amount_col: 2,
 								amount_format: "float".into(),
-								commodity: "INR".into(), // Assuming INR standard
+								commodity: "INR".into(),
 							};
 
 							// 2. Parse using CsvExcelParser
@@ -312,39 +312,72 @@ impl FinanceApp {
 								.parse_file(&csv_path, &template)
 								.map_err(|e| e.to_string())?;
 
-							// For test purposes, inject default accounts because we
-							// skipped categorization ML
+							// 3. Auto-Categorize
+							let mut categorizer =
+								crate::domain::categorizer::Categorizer::new();
+							categorizer
+								.add_rule(r"(?i)groceries", "expenses:food")
+								.unwrap();
+							categorizer
+								.add_rule(r"(?i)salary", "revenue:salary")
+								.unwrap();
+
 							for row in &mut rows {
 								if let crate::domain::parser::ParsedRow::Valid {
 									suggested_account_id,
-									amount,
+									confidence,
+									payee,
 									..
 								} = row
 								{
-									if *amount < 0 {
-										*suggested_account_id =
-											Some("expenses:food".to_string());
-									} else {
-										*suggested_account_id =
-											Some("revenue:salary".to_string());
+									if let Some((acc, conf)) =
+										categorizer.categorize(payee)
+									{
+										*suggested_account_id = Some(acc);
+										*confidence = conf;
 									}
 								}
 							}
 
-							// 3. Commit using CoreLedger
-							let ledger = CoreLedger;
-							ledger
-								.validate_and_commit(&rows, storage_clone.as_ref())
-								.map_err(|e| e.to_string())?;
-
-							Ok(())
+							Ok(rows)
 						},
 						Message::TestDataLoaded,
 					)
 				},
-				Message::TestDataLoaded(Ok(_)) => {
-					*operation =
-						OperationState::Success("Data imported successfully".into());
+				Message::TestDataLoaded(Ok(rows)) => {
+					*operation = OperationState::Triage(rows);
+					Task::none()
+				},
+				Message::TestDataLoaded(Err(e)) => {
+					*operation = OperationState::Error(e);
+					Task::none()
+				},
+				Message::CommitTriage => {
+					if let OperationState::Triage(rows) = operation {
+						let rows_clone = rows.clone();
+						let storage_clone = Arc::clone(storage);
+						*operation =
+							OperationState::Loading("Committing Transactions...".into());
+						Task::perform(
+							async move {
+								let ledger = CoreLedger;
+								ledger
+									.validate_and_commit(
+										&rows_clone,
+										storage_clone.as_ref(),
+									)
+									.map_err(|e| e.to_string())
+							},
+							Message::TriageCommitted,
+						)
+					} else {
+						Task::none()
+					}
+				},
+				Message::TriageCommitted(Ok(_)) => {
+					*operation = OperationState::Success(
+						"Transactions committed successfully!".into(),
+					);
 					let storage_clone = Arc::clone(storage);
 					Task::perform(
 						async move {
@@ -356,7 +389,7 @@ impl FinanceApp {
 						Message::BalancesLoaded,
 					)
 				},
-				Message::TestDataLoaded(Err(e)) => {
+				Message::TriageCommitted(Err(e)) => {
 					*operation = OperationState::Error(e);
 					Task::none()
 				},
@@ -479,7 +512,9 @@ impl FinanceApp {
 				.spacing(16);
 
 				match operation {
-					OperationState::Idle => {},
+					OperationState::Idle => {
+						list_col = list_col.push(sankey.view());
+					},
 					OperationState::Loading(msg) => {
 						list_col = list_col.push(text(msg).style(|theme: &Theme| {
 							iced_selection::text::Style {
@@ -487,6 +522,7 @@ impl FinanceApp {
 								..iced_selection::text::default(theme)
 							}
 						}));
+						list_col = list_col.push(sankey.view());
 					},
 					OperationState::Success(msg) => {
 						list_col = list_col.push(text(msg).style(|theme: &Theme| {
@@ -495,6 +531,7 @@ impl FinanceApp {
 								..iced_selection::text::default(theme)
 							}
 						}));
+						list_col = list_col.push(sankey.view());
 					},
 					OperationState::Error(msg) => {
 						list_col = list_col.push(text(format!("Error: {}", msg)).style(
@@ -503,10 +540,77 @@ impl FinanceApp {
 								..iced_selection::text::default(theme)
 							},
 						));
+						list_col = list_col.push(sankey.view());
+					},
+					OperationState::Triage(rows) => {
+						let mut triage_col =
+							column![text("Triage Import Data").size(20)].spacing(10);
+						for row_item in rows {
+							match row_item {
+								crate::domain::parser::ParsedRow::Valid {
+									payee,
+									amount,
+									suggested_account_id,
+									confidence,
+									..
+								} => {
+									let acc_text = suggested_account_id
+										.as_deref()
+										.unwrap_or("UNKNOWN");
+									let is_high_conf = *confidence > 0.0;
+									triage_col = triage_col.push(
+										row![
+											text(payee).width(Length::FillPortion(2)),
+											text(format!(
+												"{:.2}",
+												*amount as f64 / 100.0
+											))
+											.width(Length::FillPortion(1)),
+											text(format!(
+												"{} ({}%)",
+												acc_text, confidence
+											))
+											.style(move |t: &Theme| {
+												iced_selection::text::Style {
+													color: Some(if is_high_conf {
+														t.palette().success
+													} else {
+														t.palette().danger
+													}),
+													..iced_selection::text::default(t)
+												}
+											})
+											.width(Length::FillPortion(2))
+										]
+										.spacing(10),
+									);
+								},
+								crate::domain::parser::ParsedRow::Invalid {
+									raw_data,
+									error_reason,
+									..
+								} => {
+									triage_col = triage_col.push(
+										text(format!(
+											"INVALID: {} - {}",
+											raw_data, error_reason
+										))
+										.style(|t: &Theme| {
+											iced_selection::text::Style {
+												color: Some(t.palette().danger),
+												..iced_selection::text::default(t)
+											}
+										}),
+									);
+								},
+							}
+						}
+						triage_col = triage_col.push(
+							button("Commit Transactions").on_press(Message::CommitTriage),
+						);
+						list_col = list_col.push(triage_col);
 					},
 				}
-
-				list_col = list_col.push(sankey.view());
 
 				let list_pane = container(list_col)
 					.width(Length::FillPortion(4))
