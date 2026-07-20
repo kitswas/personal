@@ -31,7 +31,7 @@ pub enum OnboardingPhase {
 	Error(String),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct OnboardingState {
 	pub password: String,
 	pub confirm_password: String,
@@ -77,15 +77,24 @@ pub enum Message {
 	NavigateTo(Route),
 }
 
-pub enum FinanceApp {
+#[derive(Debug, Clone)]
+pub struct AppConfig {
+	pub theme: Theme,
+	pub theme_mode: ThemeMode,
+}
+
+pub struct FinanceApp {
+	pub config: AppConfig,
+	pub state: AppState,
+}
+
+pub enum AppState {
 	Booting,
 	Onboarding(OnboardingState),
 	Loaded {
 		storage: Arc<SqliteStorage>,
 		balances: Vec<(Account, i64)>,
 		sankey: SankeyDiagram,
-		theme: Theme,
-		theme_mode: ThemeMode,
 		operation: OperationState,
 		current_route: Route,
 	},
@@ -120,24 +129,48 @@ impl FinanceApp {
 			Message::StorageInitialized,
 		);
 
-		(FinanceApp::Booting, init_task)
+		let app = FinanceApp {
+			config: AppConfig {
+				theme: cosmic_dark(),
+				theme_mode: ThemeMode::System,
+			},
+			state: AppState::Booting,
+		};
+		(app, init_task)
 	}
 
 	pub fn update(&mut self, message: Message) -> Task<Message> {
-		match self {
-			FinanceApp::Booting => {
+		if let Message::ChangeThemeMode(mode) = message {
+			self.config.theme_mode = mode;
+			match mode {
+				ThemeMode::Light => self.config.theme = cosmic_light(),
+				ThemeMode::Dark => self.config.theme = cosmic_dark(),
+				ThemeMode::System => {
+					self.config.theme = get_system_theme();
+				},
+			}
+			return Task::none();
+		}
+
+		if let Message::ThemeChanged(new_theme) = message {
+			self.config.theme = new_theme;
+			return Task::none();
+		}
+
+		match &mut self.state {
+			AppState::Booting => {
 				if let Message::StorageInitialized(res) = message {
+					if self.config.theme_mode == ThemeMode::System {
+						self.config.theme = get_system_theme();
+					}
+
 					match res {
 						Ok(Some(storage)) => {
 							let storage_clone = Arc::clone(&storage);
-							let initial_theme = get_system_theme();
-
-							*self = FinanceApp::Loaded {
+							self.state = AppState::Loaded {
 								storage,
 								balances: Vec::new(),
 								sankey: SankeyDiagram::new(),
-								theme: initial_theme,
-								theme_mode: ThemeMode::System,
 								operation: OperationState::Idle,
 								current_route: Route::Dashboard,
 							};
@@ -152,117 +185,109 @@ impl FinanceApp {
 							);
 						},
 						Ok(None) => {
-							let mut state = OnboardingState::default();
-							state.base_commodity = "INR".to_string();
-							state.create_seed_accounts = true;
-							*self = FinanceApp::Onboarding(state);
+							self.state = AppState::Onboarding(OnboardingState {
+								password: String::new(),
+								confirm_password: String::new(),
+								base_commodity: "INR".to_string(),
+								create_seed_accounts: true,
+								phase: OnboardingPhase::default(),
+							});
 						},
 						Err(e) => {
-							*self = FinanceApp::Error(format!("Failed to boot: {}", e));
+							self.state =
+								AppState::Error(format!("Failed to boot: {}", e));
 						},
 					}
 				}
 				Task::none()
 			},
-			FinanceApp::Onboarding(state) => {
-				match message {
-					Message::OnboardingPasswordChanged(val) => {
-						state.password = val;
-						Task::none()
-					},
-					Message::OnboardingConfirmPasswordChanged(val) => {
-						state.confirm_password = val;
-						Task::none()
-					},
-					Message::OnboardingCommodityChanged(val) => {
-						state.base_commodity = val;
-						Task::none()
-					},
-					Message::OnboardingToggleSeedAccounts(val) => {
-						state.create_seed_accounts = val;
-						Task::none()
-					},
-					Message::OnboardingSubmit => {
-						let password = state.password.clone();
-						if password.is_empty() || password != state.confirm_password {
-							state.phase = OnboardingPhase::Error(
-								"Passwords do not match or are empty".to_string(),
-							);
-							return Task::none();
-						}
-						if state.base_commodity.is_empty() {
-							state.phase = OnboardingPhase::Error(
-								"Base commodity cannot be empty".to_string(),
-							);
-							return Task::none();
-						}
+			AppState::Onboarding(state) => match message {
+				Message::OnboardingPasswordChanged(val) => {
+					state.password = val;
+					Task::none()
+				},
+				Message::OnboardingConfirmPasswordChanged(val) => {
+					state.confirm_password = val;
+					Task::none()
+				},
+				Message::OnboardingCommodityChanged(val) => {
+					state.base_commodity = val;
+					Task::none()
+				},
+				Message::OnboardingToggleSeedAccounts(val) => {
+					state.create_seed_accounts = val;
+					Task::none()
+				},
+				Message::OnboardingSubmit => {
+					let password = state.password.clone();
+					if password.is_empty() || password != state.confirm_password {
+						state.phase = OnboardingPhase::Error(
+							"Passwords do not match or are empty".to_string(),
+						);
+						return Task::none();
+					}
+					if state.base_commodity.is_empty() {
+						state.phase = OnboardingPhase::Error(
+							"Base commodity cannot be empty".to_string(),
+						);
+						return Task::none();
+					}
 
-						let base_commodity = state.base_commodity.clone();
-						let seed = state.create_seed_accounts;
-						state.phase = OnboardingPhase::Submitting;
+					let base_commodity = state.base_commodity.clone();
+					let seed = state.create_seed_accounts;
+					state.phase = OnboardingPhase::Submitting;
 
-						Task::perform(
-							async move {
-								let entry = keyring::Entry::new(
-									"personal_finance_app",
-									"master_key",
-								)
+					Task::perform(
+						async move {
+							let entry =
+								keyring::Entry::new("personal_finance_app", "master_key")
+									.map_err(|e| e.to_string())?;
+							entry.set_password(&password).map_err(|e| e.to_string())?;
+
+							let db_path = PathBuf::from("ledger.db");
+							let _ = std::fs::remove_file(&db_path);
+
+							let storage = SqliteStorage::new(db_path, password);
+							storage.init_db().map_err(|e| e.to_string())?;
+							storage
+								.complete_onboarding(&base_commodity, seed)
 								.map_err(|e| e.to_string())?;
-								entry
-									.set_password(&password)
-									.map_err(|e| e.to_string())?;
 
-								let db_path = PathBuf::from("ledger.db");
-								// Delete the DB to ensure we start from a clean state
-								// with the new password
-								let _ = std::fs::remove_file(&db_path);
-
-								let storage = SqliteStorage::new(db_path, password);
-								storage.init_db().map_err(|e| e.to_string())?;
-								storage
-									.complete_onboarding(&base_commodity, seed)
-									.map_err(|e| e.to_string())?;
-
-								Ok(Arc::new(storage))
-							},
-							Message::OnboardingComplete,
-						)
-					},
-					Message::OnboardingComplete(Ok(storage)) => {
-						let storage_clone = Arc::clone(&storage);
-						*self = FinanceApp::Loaded {
-							storage,
-							balances: Vec::new(),
-							sankey: SankeyDiagram::new(),
-							theme: get_system_theme(),
-							theme_mode: ThemeMode::System,
-							operation: OperationState::Idle,
-							current_route: Route::Dashboard,
-						};
-						Task::perform(
-							async move {
-								match storage_clone.get_running_balances() {
-									Ok(b) => Ok(b),
-									Err(e) => Err(e.to_string()),
-								}
-							},
-							Message::BalancesLoaded,
-						)
-					},
-					Message::OnboardingComplete(Err(e)) => {
-						state.phase =
-							OnboardingPhase::Error(format!("Failed to setup DB: {}", e));
-						Task::none()
-					},
-					_ => Task::none(),
-				}
+							Ok(Arc::new(storage))
+						},
+						Message::OnboardingComplete,
+					)
+				},
+				Message::OnboardingComplete(Ok(storage)) => {
+					let storage_clone = Arc::clone(&storage);
+					self.state = AppState::Loaded {
+						storage,
+						balances: Vec::new(),
+						sankey: SankeyDiagram::new(),
+						operation: OperationState::Idle,
+						current_route: Route::Dashboard,
+					};
+					Task::perform(
+						async move {
+							match storage_clone.get_running_balances() {
+								Ok(b) => Ok(b),
+								Err(e) => Err(e.to_string()),
+							}
+						},
+						Message::BalancesLoaded,
+					)
+				},
+				Message::OnboardingComplete(Err(e)) => {
+					state.phase =
+						OnboardingPhase::Error(format!("Failed to setup DB: {}", e));
+					Task::none()
+				},
+				_ => Task::none(),
 			},
-			FinanceApp::Loaded {
+			AppState::Loaded {
 				storage,
 				balances,
 				sankey: _,
-				theme,
-				theme_mode,
 				operation,
 				current_route,
 			} => match message {
@@ -275,22 +300,12 @@ impl FinanceApp {
 					Task::none()
 				},
 				Message::BalancesLoaded(Err(e)) => {
-					*self = FinanceApp::Error(format!("Failed to load balances: {}", e));
+					self.state =
+						AppState::Error(format!("Failed to load balances: {}", e));
 					Task::none()
 				},
 				Message::SankeyNodeClicked(node_id) => {
 					println!("Node clicked: {}", node_id);
-					Task::none()
-				},
-				Message::ChangeThemeMode(mode) => {
-					*theme_mode = mode;
-					match mode {
-						ThemeMode::Light => *theme = cosmic_light(),
-						ThemeMode::Dark => *theme = cosmic_dark(),
-						ThemeMode::System => {
-							*theme = get_system_theme();
-						},
-					}
 					Task::none()
 				},
 				Message::CommitTriage => {
@@ -336,13 +351,13 @@ impl FinanceApp {
 				},
 				_ => Task::none(),
 			},
-			FinanceApp::Error(_) => Task::none(),
+			AppState::Error(_) => Task::none(),
 		}
 	}
 
 	pub fn view(&self) -> Element<Message> {
-		match self {
-			FinanceApp::Booting => {
+		match &self.state {
+			AppState::Booting => {
 				container(text("Booting & Checking Security...").size(40))
 					.width(Length::Fill)
 					.height(Length::Fill)
@@ -350,7 +365,7 @@ impl FinanceApp {
 					.center_y(Length::Fill)
 					.into()
 			},
-			FinanceApp::Onboarding(state) => match &state.phase {
+			AppState::Onboarding(state) => match &state.phase {
 				OnboardingPhase::Submitting => {
 					container(text("Initializing encrypted database...").size(24))
 						.width(Length::Fill)
@@ -400,7 +415,7 @@ impl FinanceApp {
 						.into()
 				},
 			},
-			FinanceApp::Error(e) => container(
+			AppState::Error(e) => container(
 				column![
 					text("Fatal Error").size(40).style(|theme: &Theme| {
 						iced_selection::text::Style {
@@ -418,17 +433,13 @@ impl FinanceApp {
 			.center_x(Length::Fill)
 			.center_y(Length::Fill)
 			.into(),
-			FinanceApp::Loaded {
+			AppState::Loaded {
 				balances,
 				sankey,
 				operation,
 				current_route,
-				theme_mode,
 				..
 			} => {
-				// ADR-0007: Three-pane layout (30-40-30) swapped to Nav-Detail-List
-
-				// Pane 1: Nav Pane (30%)
 				let nav_col = column![
 					text("Navigation").size(24),
 					button("Dashboard").on_press(Message::NavigateTo(Route::Dashboard)),
@@ -443,7 +454,6 @@ impl FinanceApp {
 				let nav_pane =
 					container(nav_col).width(Length::FillPortion(3)).padding(24);
 
-				// Pane 2: Detail & Action Pane (40%)
 				let mut detail_col =
 					column![text(format!("Detail: {:?}", current_route)).size(24)]
 						.spacing(16);
@@ -478,7 +488,7 @@ impl FinanceApp {
 							r = r.push(iced::widget::radio(
 								format!("{:?}", mode),
 								mode,
-								Some(*theme_mode),
+								Some(self.config.theme_mode),
 								Message::ChangeThemeMode,
 							));
 						}
@@ -494,7 +504,6 @@ impl FinanceApp {
 					.width(Length::FillPortion(4))
 					.padding(24);
 
-				// Pane 3: Secondary Content / List Pane (30%)
 				let mut list_col =
 					column![text(format!("List: {:?}", current_route)).size(24),]
 						.spacing(16);
@@ -605,19 +614,11 @@ impl FinanceApp {
 	}
 
 	pub fn theme(&self) -> Theme {
-		match self {
-			FinanceApp::Loaded { theme, .. } => theme.clone(),
-			_ => cosmic_dark(),
-		}
+		self.config.theme.clone()
 	}
 
 	pub fn subscription(&self) -> iced::Subscription<Message> {
-		let is_system = match self {
-			FinanceApp::Loaded { theme_mode, .. } => *theme_mode == ThemeMode::System,
-			_ => true,
-		};
-
-		if !is_system {
+		if self.config.theme_mode != ThemeMode::System {
 			return iced::Subscription::none();
 		}
 
