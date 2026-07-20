@@ -28,12 +28,29 @@ pub enum OperationState {
 }
 
 #[derive(Debug, Clone, Default)]
+pub enum OnboardingPhase {
+	#[default]
+	Input,
+	Submitting,
+	Error(String),
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct OnboardingState {
 	pub password: String,
 	pub confirm_password: String,
 	pub base_commodity: String,
 	pub create_seed_accounts: bool,
-	pub error: Option<String>,
+	pub phase: OnboardingPhase,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+	Dashboard,
+	Accounts,
+	Transactions,
+	Import,
+	Settings,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +72,7 @@ pub enum Message {
 	OnboardingToggleSeedAccounts(bool),
 	OnboardingSubmit,
 	OnboardingComplete(Result<Arc<SqliteStorage>, String>),
+	NavigateTo(Route),
 }
 
 pub enum FinanceApp {
@@ -66,6 +84,7 @@ pub enum FinanceApp {
 		sankey: SankeyDiagram,
 		theme: Theme,
 		operation: OperationState,
+		current_route: Route,
 	},
 	Error(String),
 }
@@ -114,6 +133,7 @@ impl FinanceApp {
 								sankey: SankeyDiagram::new(),
 								theme: cosmic_dark(),
 								operation: OperationState::Idle,
+								current_route: Route::Dashboard,
 							};
 							return Task::perform(
 								async move {
@@ -159,18 +179,21 @@ impl FinanceApp {
 					Message::OnboardingSubmit => {
 						let password = state.password.clone();
 						if password.is_empty() || password != state.confirm_password {
-							state.error =
-								Some("Passwords do not match or are empty".to_string());
+							state.phase = OnboardingPhase::Error(
+								"Passwords do not match or are empty".to_string(),
+							);
 							return Task::none();
 						}
 						if state.base_commodity.is_empty() {
-							state.error =
-								Some("Base commodity cannot be empty".to_string());
+							state.phase = OnboardingPhase::Error(
+								"Base commodity cannot be empty".to_string(),
+							);
 							return Task::none();
 						}
 
 						let base_commodity = state.base_commodity.clone();
 						let seed = state.create_seed_accounts;
+						state.phase = OnboardingPhase::Submitting;
 
 						Task::perform(
 							async move {
@@ -207,6 +230,7 @@ impl FinanceApp {
 							sankey: SankeyDiagram::new(),
 							theme: cosmic_dark(),
 							operation: OperationState::Idle,
+							current_route: Route::Dashboard,
 						};
 						Task::perform(
 							async move {
@@ -219,7 +243,8 @@ impl FinanceApp {
 						)
 					},
 					Message::OnboardingComplete(Err(e)) => {
-						state.error = Some(format!("Failed to setup DB: {}", e));
+						state.phase =
+							OnboardingPhase::Error(format!("Failed to setup DB: {}", e));
 						Task::none()
 					},
 					_ => Task::none(),
@@ -231,7 +256,12 @@ impl FinanceApp {
 				sankey: _,
 				theme,
 				operation,
+				current_route,
 			} => match message {
+				Message::NavigateTo(route) => {
+					*current_route = route;
+					Task::none()
+				},
 				Message::BalancesLoaded(Ok(b)) => {
 					*balances = b;
 					Task::none()
@@ -414,45 +444,55 @@ impl FinanceApp {
 					.center_y(Length::Fill)
 					.into()
 			},
-			FinanceApp::Onboarding(state) => {
-				let mut col = column![
-					text("Welcome to Personal Finance").size(40),
-					text("Please create a master password. This will encrypt your database at rest with AES-256.").size(16),
-					text_input("Master Password", &state.password)
-						.secure(true)
-						.on_input(Message::OnboardingPasswordChanged)
-						.padding(10),
-					text_input("Confirm Password", &state.confirm_password)
-						.secure(true)
-						.on_input(Message::OnboardingConfirmPasswordChanged)
-						.padding(10),
-					text("Base Commodity (e.g. INR, USD):").size(16),
-					text_input("Base Commodity", &state.base_commodity)
-						.on_input(Message::OnboardingCommodityChanged)
-						.padding(10),
-					checkbox(state.create_seed_accounts)
-						.label("Create default seed accounts")
-					.on_toggle(Message::OnboardingToggleSeedAccounts),
-					button("Initialize Database").on_press(Message::OnboardingSubmit).padding(10),
-				]
-				.spacing(20)
-				.max_width(500);
+			FinanceApp::Onboarding(state) => match &state.phase {
+				OnboardingPhase::Submitting => {
+					container(text("Initializing encrypted database...").size(24))
+						.width(Length::Fill)
+						.height(Length::Fill)
+						.center_x(Length::Fill)
+						.center_y(Length::Fill)
+						.into()
+				},
+				_ => {
+					let mut col = column![
+							text("Welcome to Personal Finance").size(40),
+							text("Please create a master password. This will encrypt your database at rest with AES-256.").size(16),
+							text_input("Master Password", &state.password)
+								.secure(true)
+								.on_input(Message::OnboardingPasswordChanged)
+								.padding(10),
+							text_input("Confirm Password", &state.confirm_password)
+								.secure(true)
+								.on_input(Message::OnboardingConfirmPasswordChanged)
+								.padding(10),
+							text("Base Commodity (e.g. INR, USD):").size(16),
+							text_input("Base Commodity", &state.base_commodity)
+								.on_input(Message::OnboardingCommodityChanged)
+								.padding(10),
+							checkbox(state.create_seed_accounts)
+								.label("Create default seed accounts")
+							.on_toggle(Message::OnboardingToggleSeedAccounts),
+							button("Initialize Database").on_press(Message::OnboardingSubmit).padding(10),
+						]
+						.spacing(20)
+						.max_width(500);
 
-				if let Some(err) = &state.error {
-					col = col.push(text(err).style(|theme: &Theme| {
-						iced_selection::text::Style {
-							color: Some(theme.palette().danger),
-							..iced_selection::text::default(theme)
-						}
-					}));
-				}
+					if let OnboardingPhase::Error(err) = &state.phase {
+						col = col.push(text(err).style(|theme: &Theme| {
+							iced_selection::text::Style {
+								color: Some(theme.palette().danger),
+								..iced_selection::text::default(theme)
+							}
+						}));
+					}
 
-				container(col)
-					.width(Length::Fill)
-					.height(Length::Fill)
-					.center_x(Length::Fill)
-					.center_y(Length::Fill)
-					.into()
+					container(col)
+						.width(Length::Fill)
+						.height(Length::Fill)
+						.center_x(Length::Fill)
+						.center_y(Length::Fill)
+						.into()
+				},
 			},
 			FinanceApp::Error(e) => container(
 				column![
@@ -476,38 +516,65 @@ impl FinanceApp {
 				balances,
 				sankey,
 				operation,
+				current_route,
 				..
 			} => {
-				// ADR-0007: Three-pane layout (30-40-30)
+				// ADR-0007: Three-pane layout (30-40-30) swapped to Nav-Detail-List
 
-				// Build the Nav Pane
-				let mut nav_col = column![text("Accounts").size(24)].spacing(16);
-
-				if balances.is_empty() {
-					nav_col = nav_col.push(text("No accounts or balances found."));
-				} else {
-					for (acc, bal) in balances {
-						let display_balance = match acc.account_type {
-							AccountType::Asset | AccountType::Expense => {
-								*bal as f64 / 100.0
-							},
-							AccountType::Liability
-							| AccountType::Equity
-							| AccountType::Revenue => -(*bal as f64) / 100.0,
-						};
-						nav_col = nav_col.push(iced_selection::text(format!(
-							"{}: {:.2}",
-							acc.name, display_balance
-						)));
-					}
-				}
+				// Pane 1: Nav Pane (30%)
+				let nav_col = column![
+					text("Navigation").size(24),
+					button("Dashboard").on_press(Message::NavigateTo(Route::Dashboard)),
+					button("Accounts").on_press(Message::NavigateTo(Route::Accounts)),
+					button("Transactions")
+						.on_press(Message::NavigateTo(Route::Transactions)),
+					button("Import").on_press(Message::NavigateTo(Route::Import)),
+					button("Settings").on_press(Message::NavigateTo(Route::Settings)),
+				]
+				.spacing(16);
 
 				let nav_pane =
 					container(nav_col).width(Length::FillPortion(3)).padding(24);
 
-				// List Pane
+				// Pane 2: Detail & Action Pane (40%)
+				let mut detail_col =
+					column![text(format!("Detail: {:?}", current_route)).size(24)]
+						.spacing(16);
+
+				match current_route {
+					Route::Dashboard => {
+						detail_col = detail_col.push(sankey.view());
+					},
+					Route::Accounts => {
+						detail_col = detail_col.push(text("Account Statistics"));
+						for (acc, bal) in balances {
+							let display_balance = match acc.account_type {
+								AccountType::Asset | AccountType::Expense => {
+									*bal as f64 / 100.0
+								},
+								AccountType::Liability
+								| AccountType::Equity
+								| AccountType::Revenue => -(*bal as f64) / 100.0,
+							};
+							detail_col = detail_col.push(iced_selection::text(format!(
+								"{}: {:.2}",
+								acc.name, display_balance
+							)));
+						}
+					},
+					_ => {
+						detail_col =
+							detail_col.push(text("Contextual action surface..."));
+					},
+				}
+
+				let detail_pane = container(detail_col)
+					.width(Length::FillPortion(4))
+					.padding(24);
+
+				// Pane 3: Secondary Content / List Pane (30%)
 				let mut list_col = column![
-					text("Overview (40%)").size(24),
+					text(format!("List: {:?}", current_route)).size(24),
 					row![
 						button("Toggle Theme").on_press(Message::ToggleTheme),
 						button("Load Test CSV").on_press(Message::LoadTestData)
@@ -517,9 +584,6 @@ impl FinanceApp {
 				.spacing(16);
 
 				match operation {
-					OperationState::Idle => {
-						list_col = list_col.push(sankey.view());
-					},
 					OperationState::Loading(msg) => {
 						list_col = list_col.push(text(msg).style(|theme: &Theme| {
 							iced_selection::text::Style {
@@ -527,7 +591,6 @@ impl FinanceApp {
 								..iced_selection::text::default(theme)
 							}
 						}));
-						list_col = list_col.push(sankey.view());
 					},
 					OperationState::Success(msg) => {
 						list_col = list_col.push(text(msg).style(|theme: &Theme| {
@@ -536,7 +599,6 @@ impl FinanceApp {
 								..iced_selection::text::default(theme)
 							}
 						}));
-						list_col = list_col.push(sankey.view());
 					},
 					OperationState::Error(msg) => {
 						list_col = list_col.push(text(format!("Error: {}", msg)).style(
@@ -545,7 +607,6 @@ impl FinanceApp {
 								..iced_selection::text::default(theme)
 							},
 						));
-						list_col = list_col.push(sankey.view());
 					},
 					OperationState::Triage(rows) => {
 						let mut triage_col =
@@ -615,24 +676,14 @@ impl FinanceApp {
 						);
 						list_col = list_col.push(triage_col);
 					},
+					OperationState::Idle => {},
 				}
 
 				let list_pane = container(list_col)
-					.width(Length::FillPortion(4))
+					.width(Length::FillPortion(3))
 					.padding(24);
 
-				// Detail Pane
-				let detail_pane = container(
-					column![
-						text("Detail (30%)").size(24),
-						text("Contextual action surface..."),
-					]
-					.spacing(16),
-				)
-				.width(Length::FillPortion(3))
-				.padding(24);
-
-				row![nav_pane, list_pane, detail_pane].into()
+				row![nav_pane, detail_pane, list_pane].into()
 			},
 		}
 	}
@@ -667,12 +718,12 @@ pub fn cosmic_light() -> Theme {
 	Theme::custom(
 		"Cosmic Light".to_string(),
 		iced::theme::Palette {
-			background: iced::Color::from_rgb(0.957, 0.957, 0.961),
-			text: iced::Color::from_rgb(0.141, 0.141, 0.141),
-			primary: iced::Color::from_rgb(0.282, 0.725, 0.780),
-			success: iced::Color::from_rgb(0.957, 0.545, 0.161),
-			danger: iced::Color::from_rgb(0.898, 0.224, 0.208),
-			warning: iced::Color::from_rgb(0.957, 0.745, 0.161),
+			background: iced::Color::from_rgb8(250, 250, 250),
+			text: iced::Color::from_rgb8(24, 24, 27),
+			primary: iced::Color::from_rgb8(13, 148, 136),
+			success: iced::Color::from_rgb8(16, 185, 129),
+			danger: iced::Color::from_rgb8(239, 68, 68),
+			warning: iced::Color::from_rgb8(245, 158, 11),
 		},
 	)
 }
@@ -681,12 +732,12 @@ pub fn cosmic_dark() -> Theme {
 	Theme::custom(
 		"Cosmic Dark".to_string(),
 		iced::theme::Palette {
-			background: iced::Color::from_rgb(0.141, 0.141, 0.141),
-			text: iced::Color::from_rgb(0.957, 0.957, 0.961),
-			primary: iced::Color::from_rgb(0.282, 0.725, 0.780),
-			success: iced::Color::from_rgb(0.957, 0.545, 0.161),
-			danger: iced::Color::from_rgb(0.898, 0.224, 0.208),
-			warning: iced::Color::from_rgb(0.957, 0.745, 0.161),
+			background: iced::Color::from_rgb8(24, 24, 27),
+			text: iced::Color::from_rgb8(244, 244, 245),
+			primary: iced::Color::from_rgb8(45, 212, 191),
+			success: iced::Color::from_rgb8(52, 211, 153),
+			danger: iced::Color::from_rgb8(248, 113, 113),
+			warning: iced::Color::from_rgb8(251, 191, 36),
 		},
 	)
 }
