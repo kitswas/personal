@@ -6,16 +6,47 @@ use iced::{
 use petgraph::{Direction, Graph, visit::EdgeRef};
 use std::collections::HashMap;
 
-struct NodeLayout {
-	rect: Rectangle,
-	label: String,
-	is_balanced: bool,
+#[derive(Clone, Debug)]
+pub struct RenderableSankey {
+	pub visual_nodes: Vec<RenderNode>,
+	pub visual_edges: Vec<RenderEdge>,
 }
 
-fn compute_layout(
+#[derive(Clone, Debug)]
+pub struct RenderNode {
+	pub bounds: Rectangle,
+	pub color: iced::Color,
+	pub label: String,
+	pub is_balanced: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct RenderEdge {
+	pub source_point: Point,
+	pub target_point: Point,
+	pub flow_thickness: f32,
+	pub control_point_1: Point,
+	pub control_point_2: Point,
+}
+
+impl RenderEdge {
+	pub fn build_bezier_path(&self) -> canvas::Path {
+		canvas::Path::new(|builder| {
+			builder.move_to(self.source_point);
+			builder.bezier_curve_to(
+				self.control_point_1,
+				self.control_point_2,
+				self.target_point,
+			);
+		})
+	}
+}
+
+pub fn compute_layout(
 	graph: &Graph<String, f32>,
 	bounds_size: Size,
-) -> (Vec<NodeLayout>, Vec<(Point, Point, Point, Point, f32)>) {
+	theme: &Theme,
+) -> RenderableSankey {
 	let mut ranks: HashMap<petgraph::graph::NodeIndex, usize> = HashMap::new();
 	let mut changed = true;
 	while changed {
@@ -80,9 +111,10 @@ fn compute_layout(
 	let max_rank_flow = rank_flows.iter().copied().fold(0.0, f32::max).max(1.0);
 
 	let padding_y = 20.0;
+	let padding_x = 150.0; // Margin for rightmost text labels
 	let node_width = 40.0;
 
-	let available_width = bounds_size.width - node_width;
+	let available_width = bounds_size.width - node_width - padding_x;
 	let col_spacing = if num_ranks > 1 {
 		available_width / (num_ranks - 1) as f32
 	} else {
@@ -114,12 +146,19 @@ fn compute_layout(
 				let flow = node_flows[&nx];
 				let height = flow * pixels_per_flow;
 
+				let node_color = if node_balanced[&nx] {
+					theme.palette().primary
+				} else {
+					theme.palette().danger
+				};
+
 				let rect =
 					Rectangle::new(Point::new(x, y), Size::new(node_width, height));
 				node_layouts.insert(
 					nx,
-					NodeLayout {
-						rect,
+					RenderNode {
+						bounds: rect,
+						color: node_color,
 						label: graph[nx].clone(),
 						is_balanced: node_balanced[&nx],
 					},
@@ -151,11 +190,15 @@ fn compute_layout(
 	let mut edge_out_offset = HashMap::new();
 	for (_, mut edges) in outgoing_edges {
 		edges.sort_by(|&e1, &e2| {
-			let d1 = graph.edge_endpoints(e1).unwrap().1;
-			let d2 = graph.edge_endpoints(e2).unwrap().1;
-			let y1 = node_layouts[&d1].rect.y;
-			let y2 = node_layouts[&d2].rect.y;
-			y1.partial_cmp(&y2).unwrap()
+			let d1_opt = graph.edge_endpoints(e1);
+			let d2_opt = graph.edge_endpoints(e2);
+			if let (Some((_, d1)), Some((_, d2))) = (d1_opt, d2_opt) {
+				let y1 = node_layouts.get(&d1).map(|n| n.bounds.y).unwrap_or(0.0);
+				let y2 = node_layouts.get(&d2).map(|n| n.bounds.y).unwrap_or(0.0);
+				y1.partial_cmp(&y2).unwrap_or(std::cmp::Ordering::Equal)
+			} else {
+				std::cmp::Ordering::Equal
+			}
 		});
 		let mut current_y = 0.0;
 		for e in edges {
@@ -167,11 +210,15 @@ fn compute_layout(
 	let mut edge_in_offset = HashMap::new();
 	for (_, mut edges) in incoming_edges {
 		edges.sort_by(|&e1, &e2| {
-			let s1 = graph.edge_endpoints(e1).unwrap().0;
-			let s2 = graph.edge_endpoints(e2).unwrap().0;
-			let y1 = node_layouts[&s1].rect.y;
-			let y2 = node_layouts[&s2].rect.y;
-			y1.partial_cmp(&y2).unwrap()
+			let s1_opt = graph.edge_endpoints(e1);
+			let s2_opt = graph.edge_endpoints(e2);
+			if let (Some((s1, _)), Some((s2, _))) = (s1_opt, s2_opt) {
+				let y1 = node_layouts.get(&s1).map(|n| n.bounds.y).unwrap_or(0.0);
+				let y2 = node_layouts.get(&s2).map(|n| n.bounds.y).unwrap_or(0.0);
+				y1.partial_cmp(&y2).unwrap_or(std::cmp::Ordering::Equal)
+			} else {
+				std::cmp::Ordering::Equal
+			}
 		});
 		let mut current_y = 0.0;
 		for e in edges {
@@ -185,8 +232,8 @@ fn compute_layout(
 			let weight = graph[edge];
 			let thickness = weight * pixels_per_flow;
 
-			let src_rect = &node_layouts[&src].rect;
-			let dst_rect = &node_layouts[&dst].rect;
+			let src_rect = &node_layouts[&src].bounds;
+			let dst_rect = &node_layouts[&dst].bounds;
 
 			let out_offset = edge_out_offset[&edge];
 			let in_offset = edge_in_offset[&edge];
@@ -200,35 +247,35 @@ fn compute_layout(
 			let cp1 = Point::new(start_x + (end_x - start_x) / 2.0, start_y);
 			let cp2 = Point::new(start_x + (end_x - start_x) / 2.0, end_y);
 
-			links.push((
-				Point::new(start_x, start_y),
-				cp1,
-				cp2,
-				Point::new(end_x, end_y),
-				thickness,
-			));
+			links.push(RenderEdge {
+				source_point: Point::new(start_x, start_y),
+				target_point: Point::new(end_x, end_y),
+				flow_thickness: thickness,
+				control_point_1: cp1,
+				control_point_2: cp2,
+			});
 		}
 	}
 
-	let node_layout_list = node_layouts.into_values().collect();
-	(node_layout_list, links)
+	RenderableSankey {
+		visual_nodes: node_layouts.into_values().collect(),
+		visual_edges: links,
+	}
 }
 
 pub struct SankeyDiagram {
-	cache: Cache,
-	graph: Graph<String, f32>,
-}
-
-impl From<Graph<String, f32>> for SankeyDiagram {
-	fn from(graph: Graph<String, f32>) -> Self {
-		Self {
-			cache: Cache::default(),
-			graph,
-		}
-	}
+	pub cache: Cache,
+	pub layout_data: RenderableSankey,
 }
 
 impl SankeyDiagram {
+	pub fn new(layout_data: RenderableSankey) -> Self {
+		Self {
+			cache: Cache::default(),
+			layout_data,
+		}
+	}
+
 	pub fn view(&self) -> Element<'_, Message> {
 		Canvas::new(self)
 			.width(iced::Length::Fill)
@@ -249,38 +296,32 @@ impl Program<Message> for SankeyDiagram {
 		_cursor: mouse::Cursor,
 	) -> Vec<Geometry> {
 		let geometry = self.cache.draw(renderer, bounds.size(), |frame| {
-			let (nodes, links) = compute_layout(&self.graph, frame.size());
-
 			let link_color = iced::Color {
 				a: 0.2,
 				..theme.palette().text
 			};
 
-			for (start, cp1, cp2, end, thickness) in links {
-				let mut path = canvas::path::Builder::new();
-				path.move_to(start);
-				path.bezier_curve_to(cp1, cp2, end);
+			for edge in &self.layout_data.visual_edges {
+				let path = edge.build_bezier_path();
 
 				frame.stroke(
-					&path.build(),
+					&path,
 					Stroke::default()
 						.with_color(link_color)
-						.with_width(thickness),
+						.with_width(edge.flow_thickness),
 				);
 			}
 
-			for node in nodes {
-				let node_color = if node.is_balanced {
-					theme.palette().primary
-				} else {
-					theme.palette().danger
-				};
-
-				frame.fill_rectangle(node.rect.position(), node.rect.size(), node_color);
+			for node in &self.layout_data.visual_nodes {
+				frame.fill_rectangle(
+					node.bounds.position(),
+					node.bounds.size(),
+					node.color,
+				);
 
 				frame.fill_text(Text {
 					content: node.label.clone(),
-					position: Point::new(node.rect.x, node.rect.y - 15.0),
+					position: Point::new(node.bounds.x, node.bounds.y - 15.0),
 					color: theme.palette().text,
 					size: 14.0.into(),
 					..Default::default()
@@ -301,12 +342,10 @@ impl Program<Message> for SankeyDiagram {
 			event
 		{
 			if let Some(position) = cursor.position_in(bounds) {
-				let (nodes, _) = compute_layout(&self.graph, bounds.size());
-
-				for node in nodes {
-					if node.rect.contains(position) {
+				for node in &self.layout_data.visual_nodes {
+					if node.bounds.contains(position) {
 						return Some(Action::publish(Message::SankeyNodeClicked(
-							node.label,
+							node.label.clone(),
 						)));
 					}
 				}
