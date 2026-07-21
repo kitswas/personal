@@ -1,5 +1,3 @@
-#![warn(missing_docs)]
-
 //! # Local-First Personal Finance App Library
 //!
 //! Core library for the application.
