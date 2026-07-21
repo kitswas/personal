@@ -177,7 +177,7 @@ impl FinanceApp {
 							self.state = AppState::Loaded {
 								storage,
 								balances: Vec::new(),
-								sankey: SankeyDiagram::new(),
+								sankey: SankeyDiagram::from(petgraph::Graph::new()),
 								operation: OperationState::Idle,
 								current_route: Route::Dashboard,
 							};
@@ -264,7 +264,7 @@ impl FinanceApp {
 					self.state = AppState::Loaded {
 						storage,
 						balances: Vec::new(),
-						sankey: SankeyDiagram::new(),
+						sankey: SankeyDiagram::from(petgraph::Graph::new()),
 						operation: OperationState::Idle,
 						current_route: Route::Dashboard,
 					};

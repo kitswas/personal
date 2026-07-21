@@ -17,9 +17,17 @@ struct SankeySandbox {
 
 impl SankeySandbox {
 	fn new() -> (Self, Task<Message>) {
+		let mut graph = petgraph::Graph::new();
+		// Mock data...
+		let salary = graph.add_node("Salary".to_string());
+		let checking = graph.add_node("Checking Account".to_string());
+		let expenses = graph.add_node("Expenses".to_string());
+
+		graph.add_edge(salary, checking, 5000.0);
+		graph.add_edge(checking, expenses, 4000.0);
 		(
 			Self {
-				sankey: SankeyDiagram::new(),
+				sankey: SankeyDiagram::from(graph),
 			},
 			Task::none(),
 		)
@@ -41,6 +49,6 @@ impl SankeySandbox {
 	}
 
 	fn theme(&self) -> Theme {
-		personal::app::cosmic_dark()
+		Theme::CatppuccinLatte
 	}
 }
