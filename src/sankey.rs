@@ -9,6 +9,7 @@ use std::collections::HashMap;
 struct NodeLayout {
 	rect: Rectangle,
 	label: String,
+	is_balanced: bool,
 }
 
 fn compute_layout(
@@ -42,19 +43,35 @@ fn compute_layout(
 	let num_ranks = max_rank + 1;
 
 	let mut node_flows = HashMap::new();
+	let mut node_balanced = HashMap::new();
 	let mut rank_flows = vec![0.0; num_ranks];
 
 	for nx in graph.node_indices() {
+		let mut has_in = false;
 		let in_flow: f32 = graph
 			.edges_directed(nx, Direction::Incoming)
-			.map(|e| e.weight())
+			.map(|e| {
+				has_in = true;
+				e.weight()
+			})
 			.sum();
+		let mut has_out = false;
 		let out_flow: f32 = graph
 			.edges_directed(nx, Direction::Outgoing)
-			.map(|e| e.weight())
+			.map(|e| {
+				has_out = true;
+				e.weight()
+			})
 			.sum();
 		let total_flow = in_flow.max(out_flow).max(1.0);
 		node_flows.insert(nx, total_flow);
+
+		let is_balanced = if has_in && has_out {
+			(in_flow - out_flow).abs() < f32::EPSILON
+		} else {
+			true
+		};
+		node_balanced.insert(nx, is_balanced);
 
 		let r = ranks[&nx];
 		rank_flows[r] += total_flow;
@@ -93,6 +110,7 @@ fn compute_layout(
 					NodeLayout {
 						rect,
 						label: graph[nx].clone(),
+						is_balanced: node_balanced[&nx],
 					},
 				);
 
@@ -157,7 +175,6 @@ impl From<Graph<String, f32>> for SankeyDiagram {
 }
 
 impl SankeyDiagram {
-
 	pub fn view(&self) -> Element<'_, Message> {
 		Canvas::new(self)
 			.width(iced::Length::Fill)
@@ -199,11 +216,13 @@ impl Program<Message> for SankeyDiagram {
 			}
 
 			for node in nodes {
-				frame.fill_rectangle(
-					node.rect.position(),
-					node.rect.size(),
-					theme.palette().primary,
-				);
+				let node_color = if node.is_balanced {
+					theme.palette().primary
+				} else {
+					theme.palette().danger
+				};
+
+				frame.fill_rectangle(node.rect.position(), node.rect.size(), node_color);
 
 				frame.fill_text(Text {
 					content: node.label.clone(),
