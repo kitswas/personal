@@ -89,7 +89,18 @@ fn compute_layout(
 		0.0
 	};
 
-	let available_height = bounds_size.height - padding_y * 4.0;
+	let mut max_nodes_in_rank = 0;
+	let mut nodes_in_rank = vec![0; num_ranks];
+	for nx in graph.node_indices() {
+		let r = ranks[&nx];
+		nodes_in_rank[r] += 1;
+		if nodes_in_rank[r] > max_nodes_in_rank {
+			max_nodes_in_rank = nodes_in_rank[r];
+		}
+	}
+
+	let total_padding_y = (max_nodes_in_rank as f32 + 1.0) * padding_y;
+	let available_height = (bounds_size.height - total_padding_y).max(1.0);
 	let pixels_per_flow = available_height / max_rank_flow;
 
 	let mut node_layouts = HashMap::new();
