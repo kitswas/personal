@@ -58,6 +58,11 @@ impl SqliteStorage {
 		match result {
 			Ok(v) => Ok(v == "true"),
 			Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+			Err(rusqlite::Error::SqliteFailure(_, Some(ref msg)))
+				if msg.contains("no such table") =>
+			{
+				Ok(false)
+			},
 			Err(e) => Err(StorageError::DbError(e.to_string())),
 		}
 	}
