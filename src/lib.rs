@@ -1,3 +1,4 @@
+#![deny(clippy::wildcard_enum_match_arm)]
 //! # Local-First Personal Finance App Library
 //!
 //! Core library for the application.

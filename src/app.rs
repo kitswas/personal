@@ -175,7 +175,20 @@ impl FinanceApp {
 				self.toasts.retain(|toast| toast.expires_at > *now);
 				return Task::none();
 			},
-			_ => {},
+			Message::StorageInitialized(_)
+			| Message::BalancesLoaded(_)
+			| Message::SankeyNodeClicked(_)
+			| Message::ChangeThemeMode(_)
+			| Message::CommitTriage
+			| Message::TriageCommitted(_)
+			| Message::ThemeChanged(_)
+			| Message::TabPressed { .. }
+			| Message::OnboardingPasswordChanged(_)
+			| Message::OnboardingConfirmPasswordChanged(_)
+			| Message::OnboardingCommodityChanged(_)
+			| Message::OnboardingSubmit
+			| Message::OnboardingComplete(_)
+			| Message::NavigateTo(_) => {},
 		}
 
 		if let Message::ChangeThemeMode(mode) = message {
@@ -331,7 +344,18 @@ impl FinanceApp {
 						OnboardingPhase::Error(format!("Failed to setup DB: {}", e));
 					Task::none()
 				},
-				_ => Task::none(),
+				Message::StorageInitialized(_)
+				| Message::BalancesLoaded(_)
+				| Message::SankeyNodeClicked(_)
+				| Message::ChangeThemeMode(_)
+				| Message::CommitTriage
+				| Message::TriageCommitted(_)
+				| Message::ThemeChanged(_)
+				| Message::TabPressed { .. }
+				| Message::NavigateTo(_)
+				| Message::ErrorOccurred(_)
+				| Message::DismissToast(_)
+				| Message::Tick(_) => Task::none(),
 			},
 			AppState::Loaded {
 				storage,
@@ -399,7 +423,18 @@ impl FinanceApp {
 					*operation = OperationState::Error(e);
 					Task::none()
 				},
-				_ => Task::none(),
+				Message::StorageInitialized(_)
+				| Message::ChangeThemeMode(_)
+				| Message::ThemeChanged(_)
+				| Message::TabPressed { .. }
+				| Message::OnboardingPasswordChanged(_)
+				| Message::OnboardingConfirmPasswordChanged(_)
+				| Message::OnboardingCommodityChanged(_)
+				| Message::OnboardingSubmit
+				| Message::OnboardingComplete(_)
+				| Message::ErrorOccurred(_)
+				| Message::DismissToast(_)
+				| Message::Tick(_) => Task::none(),
 			},
 			AppState::FatalError(_) => Task::none(),
 		}
@@ -442,7 +477,7 @@ impl FinanceApp {
 						.center_y(Length::Fill)
 						.into()
 				},
-				_ => {
+				OnboardingPhase::Input | OnboardingPhase::Error(_) => {
 					let mut col = column![
 							text("Welcome to Personal Finance").size(40),
 							text("Please create a master password. This will encrypt your database at rest with AES-256.").size(16),
@@ -547,7 +582,7 @@ impl FinanceApp {
 						}
 						detail_col = detail_col.push(r);
 					},
-					_ => {
+					Route::Transactions | Route::Import => {
 						detail_col =
 							detail_col.push(text("Contextual action surface..."));
 					},
@@ -799,7 +834,7 @@ pub fn cosmic_dark() -> Theme {
 pub fn resolve_os_theme(prefs: mundy::Preferences) -> Theme {
 	match prefs.color_scheme {
 		mundy::ColorScheme::Light => cosmic_light(),
-		_ => cosmic_dark(),
+		mundy::ColorScheme::NoPreference | mundy::ColorScheme::Dark => cosmic_dark(),
 	}
 }
 

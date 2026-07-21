@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![deny(clippy::wildcard_enum_match_arm)]
 
 //! # Local-First Personal Finance App
 //!

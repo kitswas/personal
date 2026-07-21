@@ -174,14 +174,11 @@ impl CsvExcelParser {
 					};
 				},
 			},
-			_ => {
+			unsupported => {
 				return ParsedRow::Invalid {
 					row_idx,
 					raw_data,
-					error_reason: format!(
-						"Unsupported amount format: {}",
-						template.amount_format
-					),
+					error_reason: format!("Unsupported amount format: {}", unsupported),
 				};
 			},
 		};
@@ -235,7 +232,7 @@ mod tests {
 				assert_eq!(payee, "Groceries");
 				assert_eq!(*amount, -5025);
 			},
-			_ => panic!("Expected valid row"),
+			ParsedRow::Invalid { .. } => panic!("Expected valid row"),
 		}
 
 		match &rows[1] {
@@ -243,7 +240,7 @@ mod tests {
 				assert_eq!(payee, "Salary");
 				assert_eq!(*amount, 200000);
 			},
-			_ => panic!("Expected valid row"),
+			ParsedRow::Invalid { .. } => panic!("Expected valid row"),
 		}
 	}
 
@@ -274,7 +271,7 @@ mod tests {
 			ParsedRow::Invalid { error_reason, .. } => {
 				assert!(error_reason.contains("Date parsing failed"));
 			},
-			_ => panic!("Expected invalid row"),
+			ParsedRow::Valid { .. } => panic!("Expected invalid row"),
 		}
 	}
 }

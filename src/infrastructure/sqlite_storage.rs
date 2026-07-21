@@ -224,7 +224,8 @@ impl Storage for SqliteStorage {
 					"liability" => AccountType::Liability,
 					"equity" => AccountType::Equity,
 					"revenue" => AccountType::Revenue,
-					_ => AccountType::Expense,
+					"expense" => AccountType::Expense,
+					other => panic!("Invalid account type in DB: {}", other),
 				};
 				let acc = Account {
 					id: row.get(0)?,
