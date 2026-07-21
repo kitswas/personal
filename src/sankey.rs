@@ -120,8 +120,54 @@ fn compute_layout(
 	}
 
 	let mut links = Vec::new();
-	let mut current_out_y = HashMap::new();
-	let mut current_in_y = HashMap::new();
+
+	let mut outgoing_edges = HashMap::new();
+	let mut incoming_edges = HashMap::new();
+
+	for edge in graph.edge_indices() {
+		if let Some((src, dst)) = graph.edge_endpoints(edge) {
+			outgoing_edges
+				.entry(src)
+				.or_insert_with(Vec::new)
+				.push(edge);
+			incoming_edges
+				.entry(dst)
+				.or_insert_with(Vec::new)
+				.push(edge);
+		}
+	}
+
+	let mut edge_out_offset = HashMap::new();
+	for (_, mut edges) in outgoing_edges {
+		edges.sort_by(|&e1, &e2| {
+			let d1 = graph.edge_endpoints(e1).unwrap().1;
+			let d2 = graph.edge_endpoints(e2).unwrap().1;
+			let y1 = node_layouts[&d1].rect.y;
+			let y2 = node_layouts[&d2].rect.y;
+			y1.partial_cmp(&y2).unwrap()
+		});
+		let mut current_y = 0.0;
+		for e in edges {
+			edge_out_offset.insert(e, current_y);
+			current_y += graph[e] * pixels_per_flow;
+		}
+	}
+
+	let mut edge_in_offset = HashMap::new();
+	for (_, mut edges) in incoming_edges {
+		edges.sort_by(|&e1, &e2| {
+			let s1 = graph.edge_endpoints(e1).unwrap().0;
+			let s2 = graph.edge_endpoints(e2).unwrap().0;
+			let y1 = node_layouts[&s1].rect.y;
+			let y2 = node_layouts[&s2].rect.y;
+			y1.partial_cmp(&y2).unwrap()
+		});
+		let mut current_y = 0.0;
+		for e in edges {
+			edge_in_offset.insert(e, current_y);
+			current_y += graph[e] * pixels_per_flow;
+		}
+	}
 
 	for edge in graph.edge_indices() {
 		if let Some((src, dst)) = graph.edge_endpoints(edge) {
@@ -131,14 +177,14 @@ fn compute_layout(
 			let src_rect = &node_layouts[&src].rect;
 			let dst_rect = &node_layouts[&dst].rect;
 
-			let out_offset = current_out_y.entry(src).or_insert(0.0);
-			let in_offset = current_in_y.entry(dst).or_insert(0.0);
+			let out_offset = edge_out_offset[&edge];
+			let in_offset = edge_in_offset[&edge];
 
 			let start_x = src_rect.x + src_rect.width;
-			let start_y = src_rect.y + *out_offset + thickness / 2.0;
+			let start_y = src_rect.y + out_offset + thickness / 2.0;
 
 			let end_x = dst_rect.x;
-			let end_y = dst_rect.y + *in_offset + thickness / 2.0;
+			let end_y = dst_rect.y + in_offset + thickness / 2.0;
 
 			let cp1 = Point::new(start_x + (end_x - start_x) / 2.0, start_y);
 			let cp2 = Point::new(start_x + (end_x - start_x) / 2.0, end_y);
@@ -150,9 +196,6 @@ fn compute_layout(
 				Point::new(end_x, end_y),
 				thickness,
 			));
-
-			*out_offset += thickness;
-			*in_offset += thickness;
 		}
 	}
 
