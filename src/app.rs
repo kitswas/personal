@@ -65,6 +65,7 @@ pub enum Message {
 	CommitTriage,
 	TriageCommitted(Result<(), String>),
 	ThemeChanged(Theme),
+	TabPressed { shift: bool },
 
 	// Onboarding
 	OnboardingPasswordChanged(String),
@@ -153,6 +154,14 @@ impl FinanceApp {
 		if let Message::ThemeChanged(new_theme) = message {
 			self.config.theme = new_theme;
 			return Task::none();
+		}
+
+		if let Message::TabPressed { shift } = message {
+			return if shift {
+				iced::widget::operation::focus_previous()
+			} else {
+				iced::widget::operation::focus_next()
+			};
 		}
 
 		match &mut self.state {
@@ -371,17 +380,20 @@ impl FinanceApp {
 							text("Welcome to Personal Finance").size(40),
 							text("Please create a master password. This will encrypt your database at rest with AES-256.").size(16),
 							text_input("Master Password", &state.password)
+								.id(iced::widget::Id::new("password"))
 								.secure(true)
 								.on_input(Message::OnboardingPasswordChanged)
 								.on_submit(Message::OnboardingSubmit)
 								.padding(10),
 							text_input("Confirm Password", &state.confirm_password)
+								.id(iced::widget::Id::new("confirm_password"))
 								.secure(true)
 								.on_input(Message::OnboardingConfirmPasswordChanged)
 								.on_submit(Message::OnboardingSubmit)
 								.padding(10),
 							text("Base Commodity (e.g. INR, USD):").size(16),
 							text_input("Base Commodity", &state.base_commodity)
+								.id(iced::widget::Id::new("commodity"))
 								.on_input(Message::OnboardingCommodityChanged)
 								.on_submit(Message::OnboardingSubmit)
 								.padding(10),
@@ -610,34 +622,50 @@ impl FinanceApp {
 	}
 
 	pub fn subscription(&self) -> iced::Subscription<Message> {
-		if self.config.theme_mode != ThemeMode::System {
-			return iced::Subscription::none();
-		}
+		let theme_sub = if self.config.theme_mode == ThemeMode::System {
+			fn theme_stream() -> impl iced::futures::Stream<Item = Message> {
+				iced::stream::channel(
+					10,
+					|mut sender: iced::futures::channel::mpsc::Sender<Message>| async move {
+						let _sub = mundy::Preferences::subscribe(
+							mundy::Interest::All,
+							move |prefs| {
+								let theme = resolve_os_theme(prefs);
+								println!("MUNDY SENDING THEME: {:?}", prefs.color_scheme);
+								if let Err(e) =
+									sender.try_send(Message::ThemeChanged(theme))
+								{
+									println!("SEND FAILED: {:?}", e);
+								}
+							},
+						);
+						let () = iced::futures::future::pending().await;
+						unreachable!()
+					},
+				)
+			}
+			iced::Subscription::run(theme_stream)
+		} else {
+			iced::Subscription::none()
+		};
 
-		fn theme_stream() -> impl iced::futures::Stream<Item = Message> {
-			iced::stream::channel(
-				10,
-				|mut sender: iced::futures::channel::mpsc::Sender<Message>| async move {
-					let _sub = mundy::Preferences::subscribe(
-						mundy::Interest::All,
-						move |prefs| {
-							let theme = resolve_os_theme(prefs);
-							println!("MUNDY SENDING THEME: {:?}", prefs.color_scheme);
-							if let Err(e) = sender.try_send(Message::ThemeChanged(theme))
-							{
-								println!("SEND FAILED: {:?}", e);
-							}
-						},
-					);
+		let keyboard_sub = iced::event::listen_with(|event, status, _window_id| {
+			if status == iced::event::Status::Ignored {
+				if let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+					key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Tab),
+					modifiers,
+					..
+				}) = event
+				{
+					return Some(Message::TabPressed {
+						shift: modifiers.shift(),
+					});
+				}
+			}
+			None
+		});
 
-					// Keep subscription alive
-					let () = iced::futures::future::pending().await;
-					unreachable!()
-				},
-			)
-		}
-
-		iced::Subscription::run(theme_stream)
+		iced::Subscription::batch([theme_sub, keyboard_sub])
 	}
 }
 
