@@ -5,12 +5,7 @@
 //! This application is designed to be a strictly local, crash-proof double-entry
 //! accounting ledger.
 
-mod app;
-mod domain;
-mod infrastructure;
-mod sankey;
-
-use app::FinanceApp;
+use personal::app::FinanceApp;
 
 fn main() -> iced::Result {
 	let font_bytes = include_bytes!(
