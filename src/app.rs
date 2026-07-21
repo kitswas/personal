@@ -12,7 +12,17 @@ use iced::{
 	widget::{button, column, container, row, text_input},
 };
 use iced_selection::text;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+	path::PathBuf,
+	sync::Arc,
+	time::{Duration, Instant},
+};
+
+#[derive(Debug, Clone)]
+pub struct Toast {
+	pub message: String,
+	pub expires_at: Instant,
+}
 
 #[derive(Debug, Clone)]
 pub enum OperationState {
@@ -74,6 +84,11 @@ pub enum Message {
 	OnboardingSubmit,
 	OnboardingComplete(Result<Arc<SqliteStorage>, String>),
 	NavigateTo(Route),
+
+	// Global error management
+	ErrorOccurred(String),
+	DismissToast(usize),
+	Tick(Instant),
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +100,7 @@ pub struct AppConfig {
 pub struct FinanceApp {
 	pub config: AppConfig,
 	pub state: AppState,
+	pub toasts: Vec<Toast>,
 }
 
 pub enum AppState {
@@ -97,7 +113,6 @@ pub enum AppState {
 		operation: OperationState,
 		current_route: Route,
 	},
-	Error(String),
 }
 
 impl FinanceApp {
@@ -134,11 +149,33 @@ impl FinanceApp {
 				theme_mode: ThemeMode::System,
 			},
 			state: AppState::Booting,
+			toasts: Vec::new(),
 		};
 		(app, init_task)
 	}
 
 	pub fn update(&mut self, message: Message) -> Task<Message> {
+		match &message {
+			Message::ErrorOccurred(err) => {
+				self.toasts.push(Toast {
+					message: err.clone(),
+					expires_at: Instant::now() + Duration::from_secs(5),
+				});
+				return Task::none();
+			},
+			Message::DismissToast(index) => {
+				if *index < self.toasts.len() {
+					self.toasts.remove(*index);
+				}
+				return Task::none();
+			},
+			Message::Tick(now) => {
+				self.toasts.retain(|toast| toast.expires_at > *now);
+				return Task::none();
+			},
+			_ => {},
+		}
+
 		if let Message::ChangeThemeMode(mode) = message {
 			self.config.theme_mode = mode;
 			match mode {
@@ -205,8 +242,10 @@ impl FinanceApp {
 							});
 						},
 						Err(e) => {
-							self.state =
-								AppState::Error(format!("Failed to boot: {}", e));
+							return self.update(Message::ErrorOccurred(format!(
+								"Failed to boot: {}",
+								e
+							)));
 						},
 					}
 				}
@@ -309,9 +348,10 @@ impl FinanceApp {
 					Task::none()
 				},
 				Message::BalancesLoaded(Err(e)) => {
-					self.state =
-						AppState::Error(format!("Failed to load balances: {}", e));
-					Task::none()
+					return self.update(Message::ErrorOccurred(format!(
+						"Failed to load balances: {}",
+						e
+					)));
 				},
 				Message::SankeyNodeClicked(node_id) => {
 					println!("Node clicked: {}", node_id);
@@ -360,12 +400,11 @@ impl FinanceApp {
 				},
 				_ => Task::none(),
 			},
-			AppState::Error(_) => Task::none(),
 		}
 	}
 
 	pub fn view(&self) -> Element<'_, Message> {
-		match &self.state {
+		let main_content: Element<'_, Message> = match &self.state {
 			AppState::Booting => {
 				container(text("Booting & Checking Security...").size(40))
 					.width(Length::Fill)
@@ -427,24 +466,6 @@ impl FinanceApp {
 						.into()
 				},
 			},
-			AppState::Error(e) => container(
-				column![
-					text("Fatal Error").size(40).style(|theme: &Theme| {
-						iced_selection::text::Style {
-							color: Some(theme.palette().danger),
-							..iced_selection::text::default(theme)
-						}
-					}),
-					text(e).size(20),
-				]
-				.spacing(20)
-				.align_x(iced::Alignment::Center),
-			)
-			.width(Length::Fill)
-			.height(Length::Fill)
-			.center_x(Length::Fill)
-			.center_y(Length::Fill)
-			.into(),
 			AppState::Loaded {
 				balances,
 				sankey,
@@ -622,7 +643,39 @@ impl FinanceApp {
 
 				row![nav_pane, detail_pane, list_pane].into()
 			},
+		};
+
+		let mut error_stack = column![].spacing(10).width(Length::Fixed(350.0));
+		for (index, toast) in self.toasts.iter().enumerate() {
+			let toast_row = row![
+				text(&toast.message).width(Length::Fill).size(14),
+				button("X").on_press(Message::DismissToast(index))
+			]
+			.align_y(iced::Alignment::Center)
+			.spacing(10);
+
+			let toast_box = container(toast_row).padding(12).style(|theme: &Theme| {
+				iced::widget::container::Style {
+					background: Some(iced::Background::Color(theme.palette().danger)),
+					text_color: Some(theme.palette().background), /* use background for
+					                                               * contrast */
+					border: iced::border::rounded(4),
+					..Default::default()
+				}
+			});
+
+			error_stack = error_stack.push(toast_box);
 		}
+
+		let overlay = container(error_stack)
+			.width(Length::Fill)
+			.height(Length::Fill)
+			.align_x(iced::Alignment::End)
+			.align_y(iced::Alignment::End)
+			.padding(20);
+
+		// Iced 0.14 stack widget
+		iced::widget::stack!(main_content, overlay).into()
 	}
 
 	pub fn theme(&self) -> Theme {
@@ -660,7 +713,7 @@ impl FinanceApp {
 		let keyboard_sub = iced::event::listen_with(|event, status, _window_id| {
 			if status == iced::event::Status::Ignored {
 				if let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-					key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Tab),
+					key: iced::keyboard::key::Key::Named(iced::keyboard::key::Named::Tab),
 					modifiers,
 					..
 				}) = event
@@ -673,7 +726,25 @@ impl FinanceApp {
 			None
 		});
 
-		iced::Subscription::batch([theme_sub, keyboard_sub])
+		fn toast_stream() -> impl iced::futures::Stream<Item = Message> {
+			iced::stream::channel(
+				1,
+				|mut sender: iced::futures::channel::mpsc::Sender<Message>| async move {
+					loop {
+						tokio::time::sleep(Duration::from_secs(1)).await;
+						let _ = sender.try_send(Message::Tick(Instant::now()));
+					}
+				},
+			)
+		}
+
+		let toast_sub = if self.toasts.is_empty() {
+			iced::Subscription::none()
+		} else {
+			iced::Subscription::run(toast_stream)
+		};
+
+		iced::Subscription::batch([theme_sub, keyboard_sub, toast_sub])
 	}
 }
 

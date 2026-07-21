@@ -73,11 +73,19 @@ impl Categorizer {
 			let prior = (*prior_count as f32) / (self.total_transactions as f32);
 			let mut log_prob = prior.ln();
 
-			let word_map = self.word_freqs.get(account_id).unwrap();
-			let total_words_in_class: usize = word_map.values().sum();
+			let total_words_in_class: usize = self
+				.word_freqs
+				.get(account_id)
+				.map(|m| m.values().sum())
+				.unwrap_or(0);
 
 			for word in &words {
-				let count = word_map.get(word).copied().unwrap_or(0);
+				let count = self
+					.word_freqs
+					.get(account_id)
+					.and_then(|m| m.get(word))
+					.copied()
+					.unwrap_or(0);
 				// Laplace smoothing
 				let prob =
 					(count as f32 + 1.0) / (total_words_in_class as f32 + vocab_size);
