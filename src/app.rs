@@ -113,6 +113,7 @@ pub enum AppState {
 		operation: OperationState,
 		current_route: Route,
 	},
+	FatalError(String),
 }
 
 impl FinanceApp {
@@ -131,7 +132,8 @@ impl FinanceApp {
 						// Check if DB exists and is fully initialized
 						match storage.is_onboarding_done() {
 							Ok(true) => Ok(Some(Arc::new(storage))),
-							_ => Ok(None), // Needs onboarding
+							Ok(false) => Ok(None), // Needs onboarding
+							Err(e) => Err(e.to_string()),
 						}
 					},
 					Err(_) => {
@@ -242,10 +244,9 @@ impl FinanceApp {
 							});
 						},
 						Err(e) => {
-							return self.update(Message::ErrorOccurred(format!(
-								"Failed to boot: {}",
-								e
-							)));
+							self.state =
+								AppState::FatalError(format!("Failed to boot: {}", e));
+							return Task::none();
 						},
 					}
 				}
@@ -400,6 +401,7 @@ impl FinanceApp {
 				},
 				_ => Task::none(),
 			},
+			AppState::FatalError(_) => Task::none(),
 		}
 	}
 
@@ -413,6 +415,24 @@ impl FinanceApp {
 					.center_y(Length::Fill)
 					.into()
 			},
+			AppState::FatalError(e) => container(
+				column![
+					text("Fatal Error").size(40).style(|theme: &Theme| {
+						iced_selection::text::Style {
+							color: Some(theme.palette().danger),
+							..iced_selection::text::default(theme)
+						}
+					}),
+					text(e).size(20),
+				]
+				.spacing(20)
+				.align_x(iced::Alignment::Center),
+			)
+			.width(Length::Fill)
+			.height(Length::Fill)
+			.center_x(Length::Fill)
+			.center_y(Length::Fill)
+			.into(),
 			AppState::Onboarding(state) => match &state.phase {
 				OnboardingPhase::Submitting => {
 					container(text("Initializing encrypted database...").size(24))
