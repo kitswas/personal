@@ -1,0 +1,30 @@
+[package]
+name = "personal-finance"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Local-first personal finance desktop app built with Rust & iced"
+repository = "https://github.com/kitswas/personal"
+readme = "../README.md"
+publish = true
+
+[[bin]]
+name = "personal-finance"
+path = "src/main.rs"
+
+[[bin]]
+name = "sankey_sandbox"
+path = "src/bin/sankey_sandbox.rs"
+
+[dependencies]
+personal-finance-core = { version = "0.1.0", path = "../personal-core" }
+iced = { version = "0.14", features = ["canvas", "tokio"] }
+petgraph = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.53", features = ["full"] }
+chrono = { version = "0.4", features = ["serde"] }
+ts-rs = "12.0"
+iced_selection = "0.5.0"
+mundy = "0.2"
+tokio-stream = "0.1"
+keyring = "4.1"

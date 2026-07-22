@@ -6,12 +6,10 @@
 //! This application is designed to be a strictly local, crash-proof double-entry
 //! accounting ledger.
 
-use personal::app::FinanceApp;
+use personal_finance::app::FinanceApp;
 
 fn main() -> iced::Result {
-	let font_bytes = include_bytes!(
-		"../monaspace/Variable Fonts/Monaspace Neon/Monaspace Neon Var.ttf"
-	);
+	let font_bytes = include_bytes!("../assets/fonts/MonaspaceNeonVar.ttf");
 
 	iced::application(FinanceApp::new, FinanceApp::update, FinanceApp::view)
 		.font(font_bytes)
@@ -24,7 +22,6 @@ fn main() -> iced::Result {
 		.theme(FinanceApp::theme)
 		.subscription(FinanceApp::subscription)
 		.window(iced::window::Settings {
-			// we can customize window here if we need
 			..Default::default()
 		})
 		.run()

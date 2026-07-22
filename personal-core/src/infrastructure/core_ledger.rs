@@ -44,17 +44,10 @@ impl Ledger for CoreLedger {
 						external_id: external_id.clone(),
 					};
 
-					// Double entry requires 2 postings that sum to 0.
-					// In a real import, one side is the bank account, the other is the
-					// category. Here we simulate importing from a bank account
-					// ("assets:bank"). A positive amount on the bank statement means
-					// bank balance increases (Debit Asset).
 					let bank_posting = Posting {
 						id: Uuid::new_v4().to_string(),
 						transaction_id: txn_id.clone(),
-						account_id: "assets:bank".to_string(), /* In a real app this
-						                                        * would be tied to the
-						                                        * import source */
+						account_id: "assets:bank".to_string(),
 						amount: *amount,
 						commodity: commodity.clone(),
 					};
@@ -62,7 +55,7 @@ impl Ledger for CoreLedger {
 					let offset_posting = Posting {
 						id: Uuid::new_v4().to_string(),
 						transaction_id: txn_id.clone(),
-						account_id, // The categorized account (e.g. expenses:groceries)
+						account_id,
 						amount: -*amount,
 						commodity: commodity.clone(),
 					};
@@ -164,7 +157,7 @@ mod tests {
 
 		assert_eq!(bank_p.amount, -5000);
 		assert_eq!(expense_p.amount, 5000);
-		assert_eq!(bank_p.amount + expense_p.amount, 0); // Double entry invariant holds
+		assert_eq!(bank_p.amount + expense_p.amount, 0);
 	}
 
 	#[test]

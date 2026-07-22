@@ -1,46 +1,6 @@
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[package]
-name = "personal"
-description = "Personal Finance made private."
-authors = ["kitswas"]
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-iced = { version = "0.14", features = ["canvas", "tokio"] }
-petgraph = "0.8"
-serde = { version = "1.0", features = ["derive"] }
-# Async runtime
-tokio = { version = "1.53", features = ["full"] }
-
-# Full-page AES-256 encrypted SQLite — bundles SQLCipher + vendored OpenSSL.
-# See ADR 0001 for the rationale.
-rusqlite = { version = "0.40", features = ["bundled-sqlcipher"] }
-
-# OS keyring — stores the master DB key; never writes the key to disk.
-keyring = "4.1"
-
-# Excel / CSV parsing for import pipeline (Phase 2+).
-calamine = { version = "0.36", features = ["dates"] }
-csv = "1"
-
-# TOML for import templates (Phase 2+).
-toml = "1.1"
-
-# Regex with size_limit to prevent catastrophic backtracking (Phase 2+).
-regex = "1.13"
-
-# Utilities.
-uuid = { version = "1", features = ["v4"] }
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "2.0"
-anyhow = "1.0"
-ts-rs = "12.0"
-iced_selection = "0.5.0"
-mundy = "0.2"
-tokio-stream = "0.1"
-
-
-[dev-dependencies]
-# Isolated temporary DB files per test — no shared state between tests.
-tempfile = "3"
+[workspace]
+members = [
+    "personal-core",
+    "personal-finance"
+]
+resolver = "2"

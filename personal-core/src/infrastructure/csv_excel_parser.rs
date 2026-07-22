@@ -84,7 +84,7 @@ impl CsvExcelParser {
 		let mut iter = range.rows().enumerate();
 
 		if template.has_headers {
-			iter.next(); // Skip header
+			iter.next();
 		}
 
 		for (idx, row) in iter {
@@ -100,8 +100,7 @@ impl CsvExcelParser {
 					Data::Float(f) => f.to_string(),
 					Data::Int(i) => i.to_string(),
 					Data::Bool(b) => b.to_string(),
-					Data::DateTime(d) => d.to_string(), /* Keep as float-based string */
-					// for now
+					Data::DateTime(d) => d.to_string(),
 					Data::DateTimeIso(s) => s.clone(),
 					Data::DurationIso(s) => s.clone(),
 					Data::Error(e) => format!("Error: {:?}", e),
@@ -140,7 +139,6 @@ impl CsvExcelParser {
 		let payee = cols[template.payee_col].trim().to_string();
 		let amount_str = cols[template.amount_col].trim();
 
-		// Parse date (Assume standard time T00:00:00Z for CSVs without time)
 		let timestamp = match NaiveDate::parse_from_str(date_str, &template.date_format) {
 			Ok(d) => format!("{}T00:00:00Z", d.format("%Y-%m-%d")),
 			Err(e) => {
@@ -152,7 +150,6 @@ impl CsvExcelParser {
 			},
 		};
 
-		// Parse amount to paise (integer)
 		let amount = match template.amount_format.as_str() {
 			"float" => match amount_str.parse::<f64>() {
 				Ok(f) => (f * 100.0).round() as i64,
@@ -249,7 +246,7 @@ mod tests {
 		let dir = tempdir().unwrap();
 		let file_path = dir.path().join("bad_date.csv");
 		let mut file = File::create(&file_path).unwrap();
-		writeln!(file, "not-a-date,Groceries,-50.25").unwrap(); // completely invalid date
+		writeln!(file, "not-a-date,Groceries,-50.25").unwrap();
 
 		let template = ImportTemplate {
 			name: "Test CSV".into(),

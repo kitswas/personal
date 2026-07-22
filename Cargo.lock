@@ -2676,27 +2676,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
-name = "personal"
+name = "personal-finance"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "iced",
+ "iced_selection",
+ "keyring",
+ "mundy",
+ "personal-finance-core",
+ "petgraph",
+ "serde",
+ "tokio",
+ "tokio-stream",
+ "ts-rs",
+]
+
+[[package]]
+name = "personal-finance-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "calamine",
  "chrono",
  "csv",
- "iced",
- "iced_selection",
  "keyring",
- "mundy",
- "petgraph",
  "regex",
  "rusqlite",
  "serde",
  "tempfile",
  "thiserror 2.0.19",
- "tokio",
- "tokio-stream",
  "toml",
- "ts-rs",
  "uuid",
 ]
 

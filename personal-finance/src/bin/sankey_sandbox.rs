@@ -1,8 +1,9 @@
 use iced::{Element, Length, Size, Task, Theme, widget::container};
-use personal::{
+use personal_finance::{
 	app::Message,
-	sankey::{RenderableSankey, SankeyDiagram, compute_layout},
+	sankey::{RenderableSankey, SankeyDiagram},
 };
+use std::collections::HashMap;
 
 pub fn main() -> iced::Result {
 	iced::application(
@@ -106,8 +107,13 @@ impl SankeySandbox {
 				let graph = build_sandbox_graph();
 				Task::perform(
 					async move {
-						let layout =
-							compute_layout(&graph, size, &Theme::CatppuccinLatte);
+						let colors = HashMap::new();
+						let layout = SankeyDiagram::compute_layout(
+							&graph,
+							&colors,
+							size.width,
+							size.height,
+						);
 						SandboxMessage::LayoutReady(layout)
 					},
 					|m| m,

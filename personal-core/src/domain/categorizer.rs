@@ -20,7 +20,6 @@ impl Categorizer {
 		pattern: &str,
 		account_id: &str,
 	) -> Result<(), regex::Error> {
-		// Use size_limit to prevent catastrophic backtracking as per Plan.md
 		let re = regex::RegexBuilder::new(pattern)
 			.size_limit(10 * 1024 * 1024)
 			.build()?;
@@ -67,7 +66,7 @@ impl Categorizer {
 		let mut best_score = f32::NEG_INFINITY;
 		let mut best_account = None;
 
-		let vocab_size = 1000.0; // Laplace smoothing vocabulary size heuristic
+		let vocab_size = 1000.0;
 
 		for (account_id, prior_count) in &self.account_priors {
 			let prior = (*prior_count as f32) / (self.total_transactions as f32);
@@ -86,7 +85,6 @@ impl Categorizer {
 					.and_then(|m| m.get(word))
 					.copied()
 					.unwrap_or(0);
-				// Laplace smoothing
 				let prob =
 					(count as f32 + 1.0) / (total_words_in_class as f32 + vocab_size);
 				log_prob += prob.ln();
@@ -99,7 +97,6 @@ impl Categorizer {
 		}
 
 		best_account.map(|acc| {
-			// Pseudo-confidence score
 			let confidence = (best_score.exp() * 100.0).clamp(0.0, 0.99);
 			(acc, confidence)
 		})
@@ -121,7 +118,7 @@ mod tests {
 		assert_eq!(res.unwrap().0, "expenses:transport");
 
 		let res2 = categorizer.categorize("LYFT");
-		assert!(res2.is_none()); // No rule, no ML data yet
+		assert!(res2.is_none());
 	}
 
 	#[test]

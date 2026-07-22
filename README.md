@@ -4,6 +4,7 @@ A local-first, crash-proof desktop application built with pure Rust and `iced` f
 
 > [!WARNING]
 > This project is still in early development. Expect breaking changes.
+> Not yet ready for regular use.
 
 ## Recommended IDE Setup
 

@@ -1,17 +1,18 @@
-use crate::{
-	domain::{
-		ledger::Ledger,
-		models::{Account, AccountType},
-		storage::Storage,
-	},
-	infrastructure::{core_ledger::CoreLedger, sqlite_storage::SqliteStorage},
-	sankey::SankeyDiagram,
-};
+use crate::sankey::SankeyDiagram;
 use iced::{
 	Element, Length, Task, Theme,
 	widget::{button, column, container, row, text_input},
 };
 use iced_selection::text;
+use personal_finance_core::{
+	domain::{
+		ledger::Ledger,
+		models::{Account, AccountType},
+		parser::ParsedRow,
+		storage::Storage,
+	},
+	infrastructure::{core_ledger::CoreLedger, sqlite_storage::SqliteStorage},
+};
 use std::{
 	path::PathBuf,
 	sync::Arc,
@@ -28,7 +29,7 @@ pub struct Toast {
 pub enum OperationState {
 	Idle,
 	Loading(String),
-	Triage(Vec<crate::domain::parser::ParsedRow>),
+	Triage(Vec<ParsedRow>),
 	Success(String),
 	Error(String),
 }
@@ -120,7 +121,6 @@ impl FinanceApp {
 	pub fn new() -> (Self, Task<Message>) {
 		let init_task = Task::perform(
 			async {
-				// We wrap in a block to isolate keyring errors
 				let entry = keyring::Entry::new("personal_finance_app", "master_key")
 					.map_err(|e| format!("Keyring error: {}", e))?;
 
@@ -129,17 +129,13 @@ impl FinanceApp {
 				match entry.get_password() {
 					Ok(password) => {
 						let storage = SqliteStorage::new(db_path, password);
-						// Check if DB exists and is fully initialized
 						match storage.is_onboarding_done() {
 							Ok(true) => Ok(Some(Arc::new(storage))),
-							Ok(false) => Ok(None), // Needs onboarding
+							Ok(false) => Ok(None),
 							Err(e) => Err(e.to_string()),
 						}
 					},
-					Err(_) => {
-						// Password not found in keyring
-						Ok(None)
-					},
+					Err(_) => Ok(None),
 				}
 			},
 			Message::StorageInitialized,
@@ -626,7 +622,7 @@ impl FinanceApp {
 							column![text("Triage Import Data").size(20)].spacing(10);
 						for row_item in rows {
 							match row_item {
-								crate::domain::parser::ParsedRow::Valid {
+								ParsedRow::Valid {
 									payee,
 									amount,
 									suggested_account_id,
@@ -664,7 +660,7 @@ impl FinanceApp {
 										.spacing(10),
 									);
 								},
-								crate::domain::parser::ParsedRow::Invalid {
+								ParsedRow::Invalid {
 									raw_data,
 									error_reason,
 									..
@@ -712,8 +708,7 @@ impl FinanceApp {
 			let toast_box = container(toast_row).padding(12).style(|theme: &Theme| {
 				iced::widget::container::Style {
 					background: Some(iced::Background::Color(theme.palette().danger)),
-					text_color: Some(theme.palette().background), /* use background for
-					                                               * contrast */
+					text_color: Some(theme.palette().background),
 					border: iced::border::rounded(4),
 					..Default::default()
 				}
@@ -729,7 +724,6 @@ impl FinanceApp {
 			.align_y(iced::Alignment::End)
 			.padding(20);
 
-		// Iced 0.14 stack widget
 		iced::widget::stack!(main_content, overlay).into()
 	}
 
